@@ -1,0 +1,15 @@
+{
+  "config": {
+    "api_key": "your-access-key-here",
+    "shortcut": "Shift+E",
+    "theme": "system",
+    "auto_start": false,
+    "asr": {
+      "provider": "doubao",
+      "app_id": "your-app-id-here",
+      "access_key": "your-access-key-here",
+      "resource_id": "volc.seedasr.sauc.concurrent",
+      "ws_url": "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async"
+    }
+  }
+}

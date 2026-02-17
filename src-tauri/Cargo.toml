@@ -25,5 +25,18 @@ tauri-plugin-store = "2"
 tauri-plugin-autostart = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tokio = { version = "1", features = ["time"] }
+tokio = { version = "1", features = ["time", "sync", "rt"] }
 
+# ASR 相关依赖
+async-trait = "0.1"
+reqwest = { version = "0.12", features = ["json"] }
+tokio-tungstenite = { version = "0.24", features = ["native-tls"] }
+futures = "0.3"
+uuid = { version = "1", features = ["v4"] }
+thiserror = "1"
+log = "0.4"
+env_logger = "0.11"
+hound = "3.5"
+enigo = "0.3"
+lazy_static = "1.5.0"
+cpal = "0.15"

@@ -1,7 +1,8 @@
 mod commands;
 mod models;
 mod tray;
-mod utils;  // 工具函数模块
+mod utils;
+mod asr;  // ASR 模块
 
 use models::state::AppState;
 use tauri::Manager;
@@ -9,6 +10,9 @@ use tauri_plugin_global_shortcut::ShortcutState;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // 初始化日志
+    env_logger::init();
+    
     tauri::Builder::default()
         .manage(AppState::new())
         .plugin(tauri_plugin_opener::init())
@@ -20,8 +24,11 @@ pub fn run() {
                     if event.state == ShortcutState::Pressed {
                         // 显示窗口
                         commands::window::show_window(app.clone());
-                        // 同时切换录音状态（仅显示窗口时使用）
-                        commands::recording::toggle_recording(app.clone());
+                        // 同时切换录音状态（在异步运行时中执行）
+                        let app_clone = app.clone();
+                        tauri::async_runtime::spawn(async move {
+                            let _ = commands::recording::toggle_recording(app_clone).await;
+                        });
                     }
                 })
                 .build(),
@@ -36,12 +43,15 @@ pub fn run() {
             commands::settings::close_settings_window,
             commands::settings::get_config,      // 新增：获取配置
             commands::settings::sync_config,     // 新增：同步配置
-            commands::settings::open_link,       // 新增：打开链接
+
+            commands::settings::test_asr_config, // 新增：测试 ASR 配置
         ])
         .setup(|app| {
             // 初始化配置（从 store 加载）
             let state = app.state::<AppState>();
-            state.init_config(&app.handle())?;
+            if let Err(e) = state.init_config(&app.handle()) {
+                log::error!("初始化配置失败: {}", e);
+            }
             
             // 获取加载后的配置来初始化快捷键
             let config = state.config.lock().unwrap();

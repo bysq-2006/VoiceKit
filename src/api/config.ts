@@ -1,10 +1,26 @@
 import { invoke } from '@tauri-apps/api/core';
 
 /**
+ * ASR 提供商类型
+ */
+export type ASRProviderType = 'doubao';
+
+/**
+ * ASR 配置
+ */
+export interface ASRConfig {
+  provider: ASRProviderType;
+  app_id?: string;
+  access_key?: string;
+  resource_id?: string;
+  ws_url?: string;
+}
+
+/**
  * 应用配置结构（与后端 AppConfig 对应）
  */
 export interface AppConfig {
-  /** API 密钥 */
+  /** API 密钥（已迁移到 asr.access_key） */
   api_key: string | null;
   /** 全局快捷键，如 "Shift+E" */
   shortcut: string;
@@ -12,6 +28,8 @@ export interface AppConfig {
   theme: 'system' | 'dark' | 'light';
   /** 开机自启 */
   auto_start: boolean;
+  /** ASR 配置 */
+  asr: ASRConfig;
 }
 
 /**
@@ -26,7 +44,7 @@ export async function getConfig(): Promise<AppConfig> {
  * @param config 完整的配置对象
  */
 export async function syncConfig(config: AppConfig): Promise<void> {
-  return await invoke('sync_config', { config });
+  return await invoke('sync_config', { newConfig: config });
 }
 
 /**
@@ -39,4 +57,11 @@ export async function updateConfig<K extends keyof AppConfig>(
   const config = await getConfig();
   config[key] = value;
   return await syncConfig(config);
+}
+
+/**
+ * 测试 ASR 配置
+ */
+export async function testASRConfig(asrConfig: ASRConfig): Promise<void> {
+  return await invoke('test_asr_config', { config: asrConfig });
 }
