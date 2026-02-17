@@ -1,5 +1,5 @@
 use tauri::{Emitter, Manager, State};
-use crate::store::state::AppState;
+use crate::models::state::AppState;
 
 /// 切换录音状态（后端控制，前端只请求）
 #[tauri::command]

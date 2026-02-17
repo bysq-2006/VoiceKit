@@ -1,10 +1,11 @@
 mod commands;
-mod store;
+mod models;
 mod tray;
+mod utils;  // 工具函数模块
 
-use store::state::AppState;
+use models::state::AppState;
 use tauri::Manager;
-use tauri_plugin_global_shortcut::{Code, Modifiers, ShortcutState, GlobalShortcutExt};
+use tauri_plugin_global_shortcut::ShortcutState;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -12,6 +13,7 @@ pub fn run() {
         .manage(AppState::new())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::default().build())  // 添加 store 插件
+        .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, None))  // 开机自启插件
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, _shortcut, event| {
@@ -31,8 +33,10 @@ pub fn run() {
             commands::recording::get_recording_state,
             commands::recording::toggle_recording,
             commands::settings::open_settings,
+            commands::settings::close_settings_window,
             commands::settings::get_config,      // 新增：获取配置
             commands::settings::sync_config,     // 新增：同步配置
+            commands::settings::open_link,       // 新增：打开链接
         ])
         .setup(|app| {
             // 初始化配置（从 store 加载）
@@ -45,44 +49,35 @@ pub fn run() {
             drop(config);  // 释放锁
             
             // 注册快捷键
-            let shortcut = parse_shortcut(&shortcut_str)?;
-            app.global_shortcut().register(shortcut)?;
+            utils::shortcut::init_shortcut(app, &shortcut_str)?;
 
             // 设置系统托盘
             tray::setup_tray(app)?;
+
+            // 主窗口失去焦点时自动隐藏（延迟判断，避免拖动时误判）
+            let app_handle = app.handle().clone();
+            if let Some(main_window) = app.get_webview_window("main") {
+                main_window.on_window_event(move |event| {
+                    if let tauri::WindowEvent::Focused(false) = event {
+                        // 延迟 200ms 检查，拖动窗口会快速重新获得焦点
+                        let handle = app_handle.clone();
+                        tauri::async_runtime::spawn(async move {
+                            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+                            // 再次确认：设置窗口没打开 且 主窗口确实没焦点 才隐藏
+                            if handle.get_webview_window("settings").is_none() {
+                                if let Some(main) = handle.get_webview_window("main") {
+                                    if let Ok(false) = main.is_focused() {
+                                        commands::recording::hide_and_stop_recording(handle);
+                                    }
+                                }
+                            }
+                        });
+                    }
+                });
+            }
 
             Ok(())
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
-}
-
-/// 将字符串解析为快捷键（简单实现）
-fn parse_shortcut(s: &str) -> Result<tauri_plugin_global_shortcut::Shortcut, String> {
-    // 简单解析 "Shift+E" 格式
-    let parts: Vec<&str> = s.split('+').collect();
-    if parts.len() != 2 {
-        // 默认返回 Shift+E
-        return Ok(tauri_plugin_global_shortcut::Shortcut::new(
-            Some(Modifiers::SHIFT),
-            Code::KeyE,
-        ));
-    }
-    
-    let modifier = match parts[0].trim() {
-        "Shift" => Some(Modifiers::SHIFT),
-        "Ctrl" | "Control" => Some(Modifiers::CONTROL),
-        "Alt" => Some(Modifiers::ALT),
-        "Cmd" | "Command" => Some(Modifiers::META),
-        _ => None,
-    };
-    
-    let code = match parts[1].trim() {
-        "E" => Code::KeyE,
-        "R" => Code::KeyR,
-        "Space" => Code::Space,
-        _ => Code::KeyE,
-    };
-    
-    Ok(tauri_plugin_global_shortcut::Shortcut::new(modifier, code))
 }

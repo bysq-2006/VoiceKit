@@ -1,5 +1,5 @@
 use std::sync::Mutex;
-use crate::store::config::AppConfig;
+use crate::models::config::AppConfig;
 
 pub struct AppState {
     /// 是否正在语音转文字（录音中）

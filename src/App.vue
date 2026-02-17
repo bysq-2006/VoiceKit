@@ -7,19 +7,54 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 const isActive = ref(false);
 let unlisten: UnlistenFn;
 
+// Web Audio API 上下文（用于倒放）
+let audioContext: AudioContext | null = null;
+let audioBuffer: AudioBuffer | null = null;
+
+// 预加载音频
 onMounted(async () => {
   // 启动时获取当前状态
   isActive.value = await invoke('get_recording_state');
   
+  // 初始化 Web Audio API
+  audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+  
+  // 加载音频文件
+  try {
+    const response = await fetch('/recording-toggle.wav');
+    const arrayBuffer = await response.arrayBuffer();
+    audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+  } catch (e) {
+    console.error('加载音频失败:', e);
+  }
+  
   // 监听后端状态变化事件
   unlisten = await listen<boolean>('recording-state-changed', (event) => {
-    isActive.value = event.payload;
+    const newState = event.payload;
+    const oldState = isActive.value;
+    isActive.value = newState;
+    
+    // 播放音效：开始录音时播放音效
+    if (newState && !oldState) {
+      playSound();
+    }
   });
 });
 
 onUnmounted(() => {
   unlisten?.();
+  audioContext?.close();
 });
+
+// 播放音效
+function playSound() {
+  if (!audioContext || !audioBuffer) return;
+  
+  const source = audioContext.createBufferSource();
+  source.buffer = audioBuffer;
+  source.connect(audioContext.destination);
+  source.start(0);
+}
 
 // 点击按钮：只发送切换请求给后端，不直接改状态
 const onMicClick = async () => {
@@ -96,7 +131,7 @@ const openSettings = async () => {
   width: 100%;
   height: 100%;
   background: linear-gradient(180deg, #f5f5f5 0%, #e8e8e8 100%);
-  border-radius: 16px;
+  border-radius: 8px;
   box-shadow: 0 2px 16px rgba(0, 0, 0, 0.15);
   display: flex;
   flex-direction: column;
