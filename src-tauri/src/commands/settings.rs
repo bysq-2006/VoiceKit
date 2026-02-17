@@ -1,6 +1,5 @@
 use tauri::{AppHandle, Manager, WebviewWindow};
 use crate::models::{state::AppState, config::AppConfig};
-use crate::asr::factory::ASRFactory;
 
 const LABEL: &str = "settings";
 const URL: &str = "/src/settings.html";
@@ -12,12 +11,10 @@ pub async fn open_settings(app: AppHandle) -> Result<(), String> {
         return Ok(());
     }
 
-    // 获取主窗口位置和大小（使用 inner 避免装饰边框的影响）
     let main = app.get_webview_window("main").ok_or("主窗口不存在")?;
     let pos = main.inner_position().map_err(|e| e.to_string())?;
     let size = main.inner_size().map_err(|e| e.to_string())?;
     
-    // 计算设置窗口位置：主窗口正下方居中
     let settings_w = 480.0;
     let gap = 8.0;
     
@@ -41,7 +38,6 @@ pub async fn open_settings(app: AppHandle) -> Result<(), String> {
     let _ = w.show();
     let _ = w.set_focus();
     
-    // 设置窗口失去焦点时自动关闭
     let app_handle = app.clone();
     w.on_window_event(move |event| {
         if let tauri::WindowEvent::Focused(false) = event {
@@ -80,10 +76,3 @@ pub fn sync_config(
     }
     Ok(())
 }
-
-#[tauri::command]
-pub async fn test_asr_config(config: crate::asr::factory::ASRConfig) -> Result<(), String> {
-    ASRFactory::test_config(&config).await.map_err(|e| e.to_string())
-}
-
-
