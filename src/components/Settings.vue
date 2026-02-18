@@ -125,8 +125,6 @@ const displayShortcut = computed(() =>
       </div>
     </div>
 
-    <div class="divider"></div>
-
     <!-- 开机自启 -->
     <div class="item">
       <div>
@@ -137,8 +135,6 @@ const displayShortcut = computed(() =>
         <span></span>
       </label>
     </div>
-
-    <div class="divider"></div>
 
     <!-- ASR 提供商选择 -->
     <div class="item">
@@ -175,17 +171,23 @@ const displayShortcut = computed(() =>
   height: 100%;
   background: #efefef;
   border-radius: 8px;
-  overflow-y: auto;
-  padding: 16px;
+  padding: 20px;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+}
+
+.settings::-webkit-scrollbar {
+  display: none;
 }
 
 .item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 0;
 }
 
 .title {
@@ -258,10 +260,10 @@ const displayShortcut = computed(() =>
   transform: translateX(16px);
 }
 
-.divider {
-  height: 1px;
-  background: #dadce0;
-  margin: 8px 0;
+.config-area {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 select, input {
@@ -276,13 +278,6 @@ select, input {
 select:focus, input:focus {
   outline: none;
   border-color: #0d9488;
-}
-
-.config-area {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px 0;
 }
 
 .config-area input, .config-area select {

@@ -56,12 +56,12 @@ function playSound() {
   source.start(0);
 }
 
-// 点击按钮：只发送切换请求给后端，不直接改状态
+// 点击按钮：设置录音状态，后端监听变化后执行录音
 const onMicClick = async () => {
   try {
-    await invoke('toggle_recording');
+    await invoke('set_recording', { recording: !isActive.value });
   } catch (e) {
-    console.error('toggle_recording error:', e);
+    console.error('set_recording error:', e);
   }
 };
 

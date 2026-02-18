@@ -2,9 +2,10 @@ mod commands;
 mod models;
 mod tray;
 mod utils;
+mod workflow;
 
 use models::state::AppState;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 use tauri_plugin_global_shortcut::ShortcutState;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -21,10 +22,15 @@ pub fn run() {
                 .with_handler(|app, _shortcut, event| {
                     if event.state == ShortcutState::Pressed {
                         commands::window::show_window(app.clone());
-                        let app_clone = app.clone();
-                        tauri::async_runtime::spawn(async move {
-                            let _ = commands::recording::toggle_recording(app_clone).await;
-                        });
+                        let state = app.state::<AppState>();
+                        let mut is_recording = state.is_recording.lock().unwrap();
+                        *is_recording = !*is_recording;
+                        let new_state = *is_recording;
+                        drop(is_recording);
+                        
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.emit("recording-state-changed", new_state);
+                        }
                     }
                 })
                 .build(),
@@ -34,7 +40,7 @@ pub fn run() {
             commands::recording::hide_and_stop_recording,
             commands::window::quit_app,
             commands::recording::get_recording_state,
-            commands::recording::toggle_recording,
+            commands::recording::set_recording,
             commands::settings::open_settings,
             commands::settings::close_settings_window,
             commands::settings::get_config,
