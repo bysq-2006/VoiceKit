@@ -59,7 +59,7 @@ pub fn run() {
             drop(config);
             
             // 克隆 AppState 用于录音监控线程
-            let state_clone = state.inner().clone();
+            let state_clone = Arc::new(state.inner().clone());
             
             utils::shortcut::init_shortcut(app, &shortcut_str)?;
             tray::setup_tray(app)?;
@@ -84,7 +84,10 @@ pub fn run() {
             }
 
             // 启动录音监控线程
-            workflow::recorder::init_recorder(Arc::new(state_clone));
+            workflow::recorder::init_recorder(state_clone.clone());
+            
+            // 启动输入模拟器（从 TextBuffer 读取）
+            workflow::input_simulator::init_input_simulator(state_clone);
 
             Ok(())
         })

@@ -1,15 +1,15 @@
-use tauri::Manager;
+use crate::utils::window_ext;
 
-/// 显示窗口
 #[tauri::command]
 pub fn show_window(app: tauri::AppHandle) {
-    if let Some(window) = app.get_webview_window("main") {
-        let _: Result<(), _> = window.show();
-        let _: Result<(), _> = window.set_focus();
-    }
+    window_ext::show_no_activate(&app, "main");
 }
 
-/// 退出程序
+#[tauri::command]
+pub fn hide_window(app: tauri::AppHandle) {
+    window_ext::hide(&app, "main");
+}
+
 #[tauri::command]
 pub fn quit_app(app: tauri::AppHandle) {
     app.exit(0);

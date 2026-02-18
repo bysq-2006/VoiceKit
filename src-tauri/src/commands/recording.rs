@@ -1,5 +1,6 @@
 use tauri::{Emitter, Manager, State};
 use crate::models::state::AppState;
+use crate::utils::window_ext;
 
 #[tauri::command]
 pub fn set_recording(
@@ -7,23 +8,17 @@ pub fn set_recording(
     state: State<AppState>,
     recording: bool,
 ) -> Result<(), String> {
-    {
-        let mut is_recording = state.is_recording.lock().unwrap();
-        *is_recording = recording;
-    }
+    *state.is_recording.lock().unwrap() = recording;
     
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.emit("recording-state-changed", recording);
     }
-    
     Ok(())
 }
 
 #[tauri::command]
 pub fn hide_and_stop_recording(app: tauri::AppHandle) {
-    if let Some(window) = app.get_webview_window("main") {
-        let _ = window.hide();
-    }
+    window_ext::hide(&app, "main");
 }
 
 #[tauri::command]
