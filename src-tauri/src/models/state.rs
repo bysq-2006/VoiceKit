@@ -3,9 +3,10 @@ use std::sync::Arc;
 use crate::models::config::AppConfig;
 use crate::models::buffer::{AudioBuffer, TextBuffer};
 
+#[derive(Clone)]
 pub struct AppState {
-    pub is_recording: Mutex<bool>,
-    pub config: Mutex<AppConfig>,
+    pub is_recording: Arc<Mutex<bool>>,
+    pub config: Arc<Mutex<AppConfig>>,
     pub audio_buffer: Arc<AudioBuffer>,
     pub text_buffer: Arc<TextBuffer>,
 }
@@ -13,8 +14,8 @@ pub struct AppState {
 impl AppState {
     pub fn new() -> Self {
         Self {
-            is_recording: Mutex::new(false),
-            config: Mutex::new(AppConfig::default()),
+            is_recording: Arc::new(Mutex::new(false)),
+            config: Arc::new(Mutex::new(AppConfig::default())),
             audio_buffer: Arc::new(AudioBuffer::new()),
             text_buffer: Arc::new(TextBuffer::new()),
         }

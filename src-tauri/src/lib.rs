@@ -7,6 +7,7 @@ mod workflow;
 use models::state::AppState;
 use tauri::{Emitter, Manager};
 use tauri_plugin_global_shortcut::ShortcutState;
+use std::sync::Arc;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -52,9 +53,13 @@ pub fn run() {
                 log::error!("初始化配置失败: {}", e);
             }
             
+            // 克隆配置和状态，避免借用冲突
             let config = state.config.lock().unwrap();
             let shortcut_str = config.shortcut.clone();
             drop(config);
+            
+            // 克隆 AppState 用于录音监控线程
+            let state_clone = state.inner().clone();
             
             utils::shortcut::init_shortcut(app, &shortcut_str)?;
             tray::setup_tray(app)?;
@@ -77,6 +82,9 @@ pub fn run() {
                     }
                 });
             }
+
+            // 启动录音监控线程
+            workflow::recorder::init_recorder(Arc::new(state_clone));
 
             Ok(())
         })

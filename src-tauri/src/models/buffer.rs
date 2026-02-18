@@ -57,6 +57,16 @@ impl AudioBuffer {
     pub fn is_finished(&self) -> bool {
         self.is_finished.load(Ordering::SeqCst)
     }
+
+    /// 获取当前缓冲区中的采样点数量
+    pub fn len(&self) -> usize {
+        self.data.lock().unwrap().len()
+    }
+
+    /// 检查缓冲区是否为空
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 }
 
 impl Default for AudioBuffer {

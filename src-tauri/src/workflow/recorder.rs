@@ -1,92 +1,158 @@
-use std::sync::atomic::{AtomicBool, Ordering};
+use crate::models::buffer::AudioBuffer;
+use crate::models::state::AppState;
+use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use cpal::{Sample, SampleFormat, SizedSample, Stream, StreamConfig};
 use std::sync::Arc;
+use std::thread;
+use std::time::Duration;
 
-static IS_RECORDING: AtomicBool = AtomicBool::new(false);
+const TARGET_SAMPLE_RATE: u32 = 16000;
 
-lazy_static::lazy_static! {
-    static ref AUDIO_BUFFER: Arc<std::sync::Mutex<Vec<i16>>> = Arc::new(std::sync::Mutex::new(Vec::new()));
+/// 重采样器：将输入采样率转换为16kHz
+struct Resampler {
+    input_rate: f64,
+    position: f64,
+    last_sample: f64,
+    has_last: bool,
 }
 
-pub fn start() {
-    {
-        let mut buffer = AUDIO_BUFFER.lock().unwrap();
-        buffer.clear();
-    }
-    
-    IS_RECORDING.store(true, Ordering::SeqCst);
-    log::info!("开始录音");
-    
-    let buffer_clone = AUDIO_BUFFER.clone();
-    std::thread::spawn(move || {
-        if let Err(e) = record_blocking(buffer_clone) {
-            log::error!("录音失败: {}", e);
+impl Resampler {
+    fn new(input_rate: u32) -> Self {
+        Self {
+            input_rate: input_rate as f64,
+            position: 0.0,
+            last_sample: 0.0,
+            has_last: false,
         }
-    });
-}
-
-pub fn stop() {
-    IS_RECORDING.store(false, Ordering::SeqCst);
-    log::info!("停止录音");
-}
-
-pub fn is_recording() -> bool {
-    IS_RECORDING.load(Ordering::SeqCst)
-}
-
-pub fn get_audio_data() -> Vec<i16> {
-    AUDIO_BUFFER.lock().unwrap().clone()
-}
-
-pub fn clear_buffer() {
-    AUDIO_BUFFER.lock().unwrap().clear();
-}
-
-fn record_blocking(audio_buffer: Arc<std::sync::Mutex<Vec<i16>>>) -> Result<(), String> {
-    use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-    
-    let host = cpal::default_host();
-    let device = host.default_input_device()
-        .ok_or_else(|| "找不到默认输入设备".to_string())?;
-    
-    log::info!("使用输入设备: {:?}", device.name());
-    
-    let config = cpal::StreamConfig {
-        channels: 1,
-        sample_rate: cpal::SampleRate(16000),
-        buffer_size: cpal::BufferSize::Default,
-    };
-    
-    let stream = device.build_input_stream(
-        &config,
-        move |data: &[i16], _: &cpal::InputCallbackInfo| {
-            if IS_RECORDING.load(Ordering::SeqCst) {
-                if let Ok(mut buffer) = audio_buffer.lock() {
-                    buffer.extend_from_slice(data);
-                }
-            }
-        },
-        move |err| {
-            log::error!("音频输入错误: {}", err);
-        },
-        None,
-    ).map_err(|e| format!("构建输入流失败: {}", e))?;
-    
-    stream.play()
-        .map_err(|e| format!("开始录音失败: {}", e))?;
-    
-    log::info!("音频流已开始");
-    
-    while IS_RECORDING.load(Ordering::SeqCst) {
-        std::thread::sleep(std::time::Duration::from_millis(50));
     }
-    
-    drop(stream);
-    
-    let sample_count = AUDIO_BUFFER.lock().unwrap().len();
-    log::info!("录音结束，缓冲 {} 样本 ({:.2}秒)", 
-        sample_count, 
-        sample_count as f32 / 16000.0
-    );
-    
-    Ok(())
+
+    /// 处理输入采样，返回16kHz的i16数据
+    fn process(&mut self, input: &[f64]) -> Vec<i16> {
+        let mut output = Vec::new();
+        let ratio = TARGET_SAMPLE_RATE as f64 / self.input_rate;
+        
+        for &sample in input {
+            while self.position < 1.0 {
+                if self.has_last {
+                    let t = self.position;
+                    let v = self.last_sample * (1.0 - t) + sample * t;
+                    output.push((v * 32767.0).clamp(-32768.0, 32767.0) as i16);
+                }
+                self.position += ratio;
+            }
+            self.position -= 1.0;
+            self.last_sample = sample;
+            self.has_last = true;
+        }
+        output
+    }
+}
+
+/// 音频录制器
+pub struct AudioRecorder;
+
+impl AudioRecorder {
+    /// 启动录音监控线程
+    pub fn start_monitoring(self: Arc<Self>, app_state: Arc<AppState>) {
+        thread::spawn(move || {
+            let mut was_recording = false;
+            let mut current_stream: Option<Stream> = None;
+
+            loop {
+                let is_recording = *app_state.is_recording.lock().unwrap();
+
+                if is_recording && !was_recording {
+                    log::info!("开始录音");
+                    app_state.audio_buffer.clear();
+                    current_stream = Self::start_stream(app_state.audio_buffer.clone());
+                    if current_stream.is_none() {
+                        *app_state.is_recording.lock().unwrap() = false;
+                    }
+                    was_recording = true;
+                } else if !is_recording && was_recording {
+                    log::info!("停止录音");
+                    drop(current_stream.take());
+                    app_state.audio_buffer.finish();
+                    was_recording = false;
+                }
+
+                thread::sleep(Duration::from_millis(50));
+            }
+        });
+    }
+
+    /// 启动录音流
+    fn start_stream(audio_buffer: Arc<AudioBuffer>) -> Option<Stream> {
+        let host = cpal::default_host();
+        let device = host.default_input_device()?;
+        let config = device.default_input_config().ok()?;
+
+        log::info!("录音设备: {:?}, 格式: {:?}", device.name(), config);
+        log::info!("将重采样到: {}Hz 单声道", TARGET_SAMPLE_RATE);
+
+        let stream = match config.sample_format() {
+            SampleFormat::I16 => Self::build_stream::<i16>(&device, &config.into(), audio_buffer),
+            SampleFormat::F32 => Self::build_stream::<f32>(&device, &config.into(), audio_buffer),
+            _ => {
+                log::error!("不支持的采样格式: {:?}", config.sample_format());
+                return None;
+            }
+        };
+
+        match stream {
+            Ok(s) => {
+                s.play().ok()?;
+                Some(s)
+            }
+            Err(e) => {
+                log::error!("创建录音流失败: {}", e);
+                None
+            }
+        }
+    }
+
+    /// 构建录音流（统一处理i16和f32）
+    fn build_stream<T>(
+        device: &cpal::Device,
+        config: &StreamConfig,
+        audio_buffer: Arc<AudioBuffer>,
+    ) -> Result<Stream, cpal::BuildStreamError>
+    where
+        T: Sample + SizedSample + Send + 'static,
+        f64: From<T>,
+    {
+        let channels = config.channels as usize;
+        let sample_rate = config.sample_rate.0;
+        let resampler = Arc::new(std::sync::Mutex::new(Resampler::new(sample_rate)));
+
+        device.build_input_stream(
+            config,
+            move |data: &[T], _| {
+                // 混音 + 转换为f64
+                let mono: Vec<f64> = data
+                    .chunks(channels)
+                    .map(|c| c.iter().map(|&s| f64::from(s)).sum::<f64>() / channels as f64)
+                    .collect();
+
+                // 重采样并写入
+                let out = resampler.lock().unwrap().process(&mono);
+                if !out.is_empty() {
+                    audio_buffer.write(&out);
+                }
+            },
+            |e| log::error!("录音错误: {}", e),
+            None,
+        )
+    }
+}
+
+impl Default for AudioRecorder {
+    fn default() -> Self {
+        Self
+    }
+}
+
+pub fn init_recorder(app_state: Arc<AppState>) {
+    Arc::new(AudioRecorder).start_monitoring(app_state);
+    log::info!("录音监控已启动");
 }
