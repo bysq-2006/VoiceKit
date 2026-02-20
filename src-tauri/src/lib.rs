@@ -1,3 +1,4 @@
+mod asr;
 mod commands;
 mod models;
 mod tray;
@@ -87,7 +88,18 @@ pub fn run() {
             workflow::recorder::init_recorder(state_clone.clone());
             
             // 启动输入模拟器（从 TextBuffer 读取）
-            workflow::input_simulator::init_input_simulator(state_clone);
+            workflow::input_simulator::init_input_simulator(state_clone.clone());
+
+            // 启动 ASR 管理器（根据配置选择 ASR 提供商）
+            let config = state_clone.config.lock().unwrap();
+            let asr_config = config.asr.clone();
+            drop(config);
+            asr::init_asr_manager(
+                state_clone.audio_buffer.clone(),
+                state_clone.text_buffer.clone(),
+                state_clone.is_recording.clone(),
+                asr_config,
+            );
 
             Ok(())
         })

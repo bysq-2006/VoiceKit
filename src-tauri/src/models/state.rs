@@ -13,18 +13,11 @@ pub struct AppState {
 
 impl AppState {
     pub fn new() -> Self {
-        let text_buffer = Arc::new(TextBuffer::new());
-        
-        // 初始化测试文字（用于测试输入模块）
-        text_buffer.write("这是一段测试文本，用于验证模拟输入模块是否正常工作。".to_string());
-        text_buffer.write("Hello World! 123".to_string());
-        text_buffer.write("测试完成。".to_string());
-        
         Self {
             is_recording: Arc::new(Mutex::new(false)),
             config: Arc::new(Mutex::new(AppConfig::default())),
             audio_buffer: Arc::new(AudioBuffer::new()),
-            text_buffer,
+            text_buffer: Arc::new(TextBuffer::new()),
         }
     }
     

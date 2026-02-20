@@ -13,6 +13,40 @@ pub struct AppConfig {
     
     #[serde(default)]
     pub auto_start: bool,
+
+    /// ASR 配置
+    #[serde(default)]
+    pub asr: AsrConfig,
+}
+
+/// ASR 配置
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AsrConfig {
+    /// ASR 提供商：doubao / xunfei
+    #[serde(default = "default_asr_provider")]
+    pub provider: String,
+    
+    /// API 密钥
+    #[serde(default)]
+    pub api_key: Option<String>,
+    
+    /// API 密钥 ID（某些服务需要）
+    #[serde(default)]
+    pub api_id: Option<String>,
+}
+
+impl Default for AsrConfig {
+    fn default() -> Self {
+        Self {
+            provider: default_asr_provider(),
+            api_key: None,
+            api_id: None,
+        }
+    }
+}
+
+fn default_asr_provider() -> String {
+    "doubao".to_string()
 }
 
 fn default_shortcut() -> String {
