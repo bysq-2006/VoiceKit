@@ -1,5 +1,5 @@
 use tauri::{AppHandle, Manager, WebviewWindow};
-use crate::models::{state::AppState, config::{AppConfig, AsrConfig}};
+use crate::models::{state::AppState, config::{AppConfig, AsrConfig, XunfeiConfig, DoubaoConfig}};
 
 const LABEL: &str = "settings";
 const URL: &str = "/src/settings.html";
@@ -95,14 +95,14 @@ pub fn sync_config(
 #[tauri::command]
 pub async fn test_asr_config(config: AsrConfig) -> Result<(), String> {
     match config.provider.as_str() {
-        "xunfei" => test_xunfei_config(&config).await,
-        "doubao" => test_doubao_config(&config).await,
+        "xunfei" => test_xunfei_config(&config.xunfei).await,
+        "doubao" => test_doubao_config(&config.doubao).await,
         _ => Err(format!("未知的 ASR 提供商: {}", config.provider)),
     }
 }
 
 /// 测试讯飞 ASR 配置
-async fn test_xunfei_config(config: &AsrConfig) -> Result<(), String> {
+async fn test_xunfei_config(config: &XunfeiConfig) -> Result<(), String> {
     use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
     use hmac::{Hmac, Mac};
     use sha2::Sha256;
@@ -113,7 +113,7 @@ async fn test_xunfei_config(config: &AsrConfig) -> Result<(), String> {
     const XFYUN_HOST: &str = "iat.cn-huabei-1.xf-yun.com";
     const XFYUN_WS_URL: &str = "wss://iat.cn-huabei-1.xf-yun.com/v1";
 
-    let app_id = config.api_id.as_ref().ok_or("请提供 App ID")?;
+    let app_id = config.app_id.as_ref().ok_or("请提供 App ID")?;
     let api_key = config.api_key.as_ref().ok_or("请提供 API Key")?;
     let api_secret = config.api_secret.as_ref().ok_or("请提供 API Secret")?;
 
@@ -149,12 +149,9 @@ async fn test_xunfei_config(config: &AsrConfig) -> Result<(), String> {
 }
 
 /// 测试豆包 ASR 配置
-async fn test_doubao_config(config: &AsrConfig) -> Result<(), String> {
+async fn test_doubao_config(config: &DoubaoConfig) -> Result<(), String> {
     // 豆包 ASR 测试 - 简单验证配置字段存在
-    let _app_id = config.api_id.as_ref().or(config.api_key.as_ref())
-        .ok_or("请提供 App ID 或 API Key")?;
-    let _access_key = config.api_key.as_ref().or(config.api_secret.as_ref())
-        .ok_or("请提供 Access Key")?;
+    let _api_key = config.api_key.as_ref().ok_or("请提供 API Key")?;
     
     // TODO: 实现豆包 ASR 的实际连接测试
     // 豆包的 WebSocket 连接需要更复杂的鉴权流程

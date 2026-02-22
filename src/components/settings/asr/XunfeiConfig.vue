@@ -2,18 +2,18 @@
 import { ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 
-interface XunfeiConfig {
-  api_id?: string;
+interface XunfeiConfigData {
+  app_id?: string;
   api_key?: string;
   api_secret?: string;
 }
 
 const props = defineProps<{
-  modelValue: XunfeiConfig;
+  modelValue: XunfeiConfigData;
 }>();
 
 const emit = defineEmits<{
-  'update:modelValue': [value: XunfeiConfig];
+  'update:modelValue': [value: XunfeiConfigData];
   save: [];
 }>();
 
@@ -21,7 +21,7 @@ const testing = ref(false);
 const msg = ref('');
 let timeout: number;
 
-const updateField = <K extends keyof XunfeiConfig>(field: K, value: XunfeiConfig[K]) => {
+const updateField = <K extends keyof XunfeiConfigData>(field: K, value: XunfeiConfigData[K]) => {
   emit('update:modelValue', { ...props.modelValue, [field]: value });
 };
 
@@ -32,8 +32,8 @@ const showMsg = (text: string, time = 1500) => {
 };
 
 const testConnection = async () => {
-  const { api_id, api_key, api_secret } = props.modelValue;
-  if (!api_id || !api_key || !api_secret) {
+  const { app_id, api_key, api_secret } = props.modelValue;
+  if (!app_id || !api_key || !api_secret) {
     return showMsg('请填写 App ID、API Key 和 API Secret', 2000);
   }
   testing.value = true;
@@ -42,9 +42,8 @@ const testConnection = async () => {
     await invoke('test_asr_config', {
       config: {
         provider: 'xunfei',
-        api_id,
-        api_key,
-        api_secret
+        doubao: {},
+        xunfei: props.modelValue,
       }
     });
     showMsg('连接成功！', 2000);
@@ -59,8 +58,8 @@ const testConnection = async () => {
 <template>
   <div class="asr-config">
     <input
-      :value="modelValue.api_id"
-      @input="e => updateField('api_id', (e.target as HTMLInputElement).value)"
+      :value="modelValue.app_id"
+      @input="e => updateField('app_id', (e.target as HTMLInputElement).value)"
       @blur="$emit('save')"
       placeholder="App ID"
     />

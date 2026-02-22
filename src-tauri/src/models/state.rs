@@ -22,7 +22,11 @@ impl AppState {
     }
     
     pub fn init_config(&self, app: &tauri::AppHandle) -> Result<(), String> {
-        let config = AppConfig::load(app)?;
+        let mut config = AppConfig::load(app)?;
+        // 如果快捷键为空，使用默认值
+        if config.shortcut.trim().is_empty() {
+            config.shortcut = crate::models::config::AppConfig::default().shortcut;
+        }
         *self.config.lock().unwrap() = config;
         Ok(())
     }

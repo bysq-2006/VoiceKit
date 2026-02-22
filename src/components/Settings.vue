@@ -12,11 +12,16 @@ interface AppConfig {
 const config = ref<AppConfig>({
   shortcut: 'Shift+E',
   auto_start: false,
-  asr: { 
-    provider: 'doubao', 
-    api_id: '',
-    api_key: '',
-    resource_id: 'volc.seedasr.sauc.concurrent' 
+  asr: {
+    provider: 'doubao',
+    doubao: {
+      api_key: '',
+    },
+    xunfei: {
+      app_id: '',
+      api_key: '',
+      api_secret: '',
+    },
   }
 });
 

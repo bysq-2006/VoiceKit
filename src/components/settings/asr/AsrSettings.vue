@@ -5,14 +5,23 @@ import XunfeiConfig from './XunfeiConfig.vue';
 
 export type ASRProviderType = 'doubao' | 'xunfei';
 
+// 豆包配置
+export interface DoubaoConfigData {
+  api_key?: string;
+}
+
+// 讯飞配置
+export interface XunfeiConfigData {
+  app_id?: string;
+  api_key?: string;
+  api_secret?: string;
+}
+
+// ASR 总配置（与后端结构一致）
 export interface ASRConfig {
   provider: ASRProviderType;
-  // 通用字段（与后端一致）
-  api_id?: string;        // App ID / Access Key ID
-  api_key?: string;       // Access Key / API Key
-  api_secret?: string;    // API Secret（讯飞需要）
-  // 豆包特有
-  resource_id?: string;
+  doubao: DoubaoConfigData;
+  xunfei: XunfeiConfigData;
 }
 
 const props = defineProps<{
@@ -32,51 +41,31 @@ const providers = [
 const currentProvider = computed({
   get: () => props.modelValue.provider,
   set: (val: ASRProviderType) => {
+    // 只切换 provider，保留所有服务商的配置
     emit('update:modelValue', { ...props.modelValue, provider: val });
     emit('save');
   }
 });
 
 const doubaoConfig = computed({
-  get: () => ({
-    api_id: props.modelValue.api_id,
-    api_key: props.modelValue.api_key,
-    resource_id: props.modelValue.resource_id,
-  }),
+  get: () => props.modelValue.doubao,
   set: (val) => {
     emit('update:modelValue', {
       ...props.modelValue,
-      api_id: val.api_id,
-      api_key: val.api_key,
-      resource_id: val.resource_id,
+      doubao: val,
     });
   }
 });
 
 const xunfeiConfig = computed({
-  get: () => ({
-    api_id: props.modelValue.api_id,
-    api_key: props.modelValue.api_key,
-    api_secret: props.modelValue.api_secret,
-  }),
+  get: () => props.modelValue.xunfei,
   set: (val) => {
     emit('update:modelValue', {
       ...props.modelValue,
-      api_id: val.api_id,
-      api_key: val.api_key,
-      api_secret: val.api_secret,
+      xunfei: val,
     });
   }
 });
-
-const onProviderChange = () => {
-  // 切换提供商时，清空特定配置避免混淆
-  const newConfig: ASRConfig = {
-    provider: currentProvider.value,
-  };
-  emit('update:modelValue', newConfig);
-  emit('save');
-};
 </script>
 
 <template>
@@ -86,7 +75,7 @@ const onProviderChange = () => {
       <div>
         <div class="title">语音识别服务</div>
       </div>
-      <select v-model="currentProvider" @change="onProviderChange">
+      <select v-model="currentProvider">
         <option v-for="p in providers" :key="p.key" :value="p.key">{{ p.name }}</option>
       </select>
     </div>

@@ -1,18 +1,18 @@
 use crate::models::buffer::{AudioBuffer, TextBuffer};
-use crate::models::config::AsrConfig;
+use crate::models::config::DoubaoConfig;
 use async_trait::async_trait;
 use std::sync::Arc;
 
 /// 豆包 ASR 提供商
 pub struct DoubaoAsr {
-    _config: AsrConfig,
+    _config: DoubaoConfig,
     _audio_buffer: Arc<AudioBuffer>,
     _text_buffer: Arc<TextBuffer>,
 }
 
 impl DoubaoAsr {
     pub fn new(
-        config: AsrConfig,
+        config: DoubaoConfig,
         audio_buffer: Arc<AudioBuffer>,
         text_buffer: Arc<TextBuffer>,
     ) -> Self {

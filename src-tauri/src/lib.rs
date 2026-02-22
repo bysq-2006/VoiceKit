@@ -63,7 +63,12 @@ pub fn run() {
             // 克隆 AppState 用于录音监控线程
             let state_clone = Arc::new(state.inner().clone());
             
-            utils::shortcut::init_shortcut(app, &shortcut_str)?;
+            // 注册快捷键，失败时使用默认快捷键
+            if let Err(e) = utils::shortcut::init_shortcut(app, &shortcut_str) {
+                log::warn!("注册快捷键 '{}' 失败: {}, 使用默认快捷键 Shift+E", shortcut_str, e);
+                utils::shortcut::init_shortcut(app, "Shift+E")
+                    .map_err(|e| format!("注册默认快捷键失败: {}", e))?;
+            }
             tray::setup_tray(app)?;
 
             let app_handle = app.handle().clone();

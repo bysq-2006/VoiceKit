@@ -2,33 +2,24 @@
 import { ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 
-interface DoubaoConfig {
-  api_id?: string;
+interface DoubaoConfigData {
   api_key?: string;
-  resource_id?: string;
 }
 
 const props = defineProps<{
-  modelValue: DoubaoConfig;
+  modelValue: DoubaoConfigData;
 }>();
 
 const emit = defineEmits<{
-  'update:modelValue': [value: DoubaoConfig];
+  'update:modelValue': [value: DoubaoConfigData];
   save: [];
 }>();
-
-const resources = [
-  { key: 'volc.seedasr.sauc.concurrent', name: '豆包 2.0 - 并发版' },
-  { key: 'volc.seedasr.sauc.duration', name: '豆包 2.0 - 小时版' },
-  { key: 'volc.bigasr.sauc.concurrent', name: '豆包 1.0 - 并发版' },
-  { key: 'volc.bigasr.sauc.duration', name: '豆包 1.0 - 小时版' },
-];
 
 const testing = ref(false);
 const msg = ref('');
 let timeout: number;
 
-const updateField = <K extends keyof DoubaoConfig>(field: K, value: DoubaoConfig[K]) => {
+const updateField = <K extends keyof DoubaoConfigData>(field: K, value: DoubaoConfigData[K]) => {
   emit('update:modelValue', { ...props.modelValue, [field]: value });
 };
 
@@ -39,9 +30,9 @@ const showMsg = (text: string, time = 1500) => {
 };
 
 const testConnection = async () => {
-  const { api_id, api_key } = props.modelValue;
-  if (!api_id || !api_key) {
-    return showMsg('请填写 App ID 和 Access Key', 2000);
+  const { api_key } = props.modelValue;
+  if (!api_key) {
+    return showMsg('请填写 API Key', 2000);
   }
   testing.value = true;
   showMsg('测试中...', 5000);
@@ -49,7 +40,8 @@ const testConnection = async () => {
     await invoke('test_asr_config', {
       config: {
         provider: 'doubao',
-        ...props.modelValue
+        doubao: props.modelValue,
+        xunfei: {},
       }
     });
     showMsg('连接成功！', 2000);
@@ -64,24 +56,15 @@ const testConnection = async () => {
 <template>
   <div class="asr-config">
     <input
-      :value="modelValue.api_id"
-      @input="e => updateField('api_id', (e.target as HTMLInputElement).value)"
-      @blur="$emit('save')"
-      placeholder="App ID"
-    />
-    <input
       :value="modelValue.api_key"
       @input="e => updateField('api_key', (e.target as HTMLInputElement).value)"
       @blur="$emit('save')"
       type="password"
-      placeholder="Access Key"
+      placeholder="API Key"
     />
-    <select
-      :value="modelValue.resource_id || 'volc.seedasr.sauc.concurrent'"
-      @change="e => { updateField('resource_id', (e.target as HTMLSelectElement).value); $emit('save'); }"
-    >
-      <option v-for="r in resources" :key="r.key" :value="r.key">{{ r.name }}</option>
-    </select>
+    <div class="hint">
+      <span>豆包语音识别服务</span>
+    </div>
     <div class="actions">
       <button @click="testConnection" :disabled="testing">
         {{ testing ? '测试中...' : '测试连接' }}
@@ -98,7 +81,7 @@ const testConnection = async () => {
   gap: 12px;
 }
 
-input, select {
+input {
   padding: 8px 12px;
   border: 1px solid #dadce0;
   border-radius: 4px;
@@ -108,9 +91,15 @@ input, select {
   box-sizing: border-box;
 }
 
-input:focus, select:focus {
+input:focus {
   outline: none;
   border-color: #0d9488;
+}
+
+.hint {
+  font-size: 11px;
+  color: #5f6368;
+  padding: 0 4px;
 }
 
 .actions {

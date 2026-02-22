@@ -43,7 +43,7 @@ impl AsrManager {
                     let provider: Arc<dyn AsrProvider> = match config.provider.as_str() {
                         "xunfei" => {
                             match XunfeiAsr::new(
-                                config.clone(),
+                                config.xunfei.clone(),
                                 self.audio_buffer.clone(),
                                 self.text_buffer.clone(),
                             ) {
@@ -55,7 +55,7 @@ impl AsrManager {
                             }
                         }
                         _ => Arc::new(DoubaoAsr::new(
-                            config.clone(),
+                            config.doubao.clone(),
                             self.audio_buffer.clone(),
                             self.text_buffer.clone(),
                         )),

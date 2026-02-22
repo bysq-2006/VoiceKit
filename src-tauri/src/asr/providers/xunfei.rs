@@ -1,5 +1,5 @@
 use crate::models::buffer::{AudioBuffer, TextBuffer};
-use crate::models::config::AsrConfig;
+use crate::models::config::XunfeiConfig;
 use async_trait::async_trait;
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use futures::{SinkExt, StreamExt};
@@ -104,18 +104,27 @@ struct WordCell {
 
 impl XunfeiAsr {
     pub fn new(
-        config: AsrConfig,
+        config: XunfeiConfig,
         audio_buffer: Arc<AudioBuffer>,
         text_buffer: Arc<TextBuffer>,
     ) -> Result<Self, String> {
-        let get = |field: &str, val: Option<String>| {
-            val.ok_or_else(|| format!("讯飞 ASR 需要 {}", field))
-        };
-        
+        let app_id = config
+            .app_id
+            .clone()
+            .ok_or("讯飞 ASR 需要 app_id")?;
+        let api_key = config
+            .api_key
+            .clone()
+            .ok_or("讯飞 ASR 需要 api_key")?;
+        let api_secret = config
+            .api_secret
+            .clone()
+            .ok_or("讯飞 ASR 需要 api_secret")?;
+
         Ok(Self {
-            app_id: get("app_id (配置在 api_id 字段)", config.api_id.clone())?,
-            api_key: get("api_key", config.api_key.clone())?,
-            api_secret: get("api_secret", config.api_secret.clone())?,
+            app_id,
+            api_key,
+            api_secret,
             audio_buffer,
             text_buffer,
             ws_sink: Arc::new(Mutex::new(None)),
