@@ -1,5 +1,5 @@
 {
-  "name": "voice-assistant",
+  "name": "voicekit",
   "private": true,
   "version": "0.1.0",
   "type": "module",
