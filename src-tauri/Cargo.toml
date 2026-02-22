@@ -40,6 +40,11 @@ hound = "3.5"
 enigo = "0.3"
 lazy_static = "1.5.0"
 cpal = "0.15"
+hmac = "0.12"
+sha2 = "0.10"
+httpdate = "1"
+urlencoding = "2"
+base64 = "0.22"
 
 # Windows API
 [target.'cfg(windows)'.dependencies]

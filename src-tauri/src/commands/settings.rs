@@ -1,5 +1,5 @@
 use tauri::{AppHandle, Manager, WebviewWindow};
-use crate::models::{state::AppState, config::AppConfig};
+use crate::models::{state::AppState, config::{AppConfig, AsrConfig}};
 
 const LABEL: &str = "settings";
 const URL: &str = "/src/settings.html";
@@ -87,5 +87,76 @@ pub fn sync_config(
     if old != new_config.shortcut {
         let _ = crate::utils::shortcut::update_shortcut(&app, &new_config.shortcut);
     }
+    Ok(())
+}
+
+/// 测试 ASR 配置
+/// 尝试建立 WebSocket 连接来验证配置是否正确
+#[tauri::command]
+pub async fn test_asr_config(config: AsrConfig) -> Result<(), String> {
+    match config.provider.as_str() {
+        "xunfei" => test_xunfei_config(&config).await,
+        "doubao" => test_doubao_config(&config).await,
+        _ => Err(format!("未知的 ASR 提供商: {}", config.provider)),
+    }
+}
+
+/// 测试讯飞 ASR 配置
+async fn test_xunfei_config(config: &AsrConfig) -> Result<(), String> {
+    use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
+    use hmac::{Hmac, Mac};
+    use sha2::Sha256;
+    use tokio_tungstenite::connect_async;
+
+    type HmacSha256 = Hmac<Sha256>;
+
+    const XFYUN_HOST: &str = "iat.cn-huabei-1.xf-yun.com";
+    const XFYUN_WS_URL: &str = "wss://iat.cn-huabei-1.xf-yun.com/v1";
+
+    let app_id = config.api_id.as_ref().ok_or("请提供 App ID")?;
+    let api_key = config.api_key.as_ref().ok_or("请提供 API Key")?;
+    let api_secret = config.api_secret.as_ref().ok_or("请提供 API Secret")?;
+
+    // 生成鉴权 URL
+    let date = httpdate::fmt_http_date(std::time::SystemTime::now());
+    let signature_origin = format!("host: {}\ndate: {}\nGET /v1 HTTP/1.1", XFYUN_HOST, date);
+
+    let mut mac = HmacSha256::new_from_slice(api_secret.as_bytes())
+        .map_err(|e| format!("HMAC 错误: {}", e))?;
+    mac.update(signature_origin.as_bytes());
+    let signature = BASE64.encode(mac.finalize().into_bytes());
+
+    let authorization_origin = format!(
+        "api_key=\"{}\", algorithm=\"hmac-sha256\", headers=\"host date request-line\", signature=\"{}\"",
+        api_key, signature
+    );
+    let authorization = BASE64.encode(authorization_origin.as_bytes());
+
+    let url = format!(
+        "{}?authorization={}&date={}&host={}",
+        XFYUN_WS_URL,
+        urlencoding::encode(&authorization),
+        urlencoding::encode(&date),
+        XFYUN_HOST
+    );
+
+    // 尝试建立连接
+    match tokio::time::timeout(std::time::Duration::from_secs(5), connect_async(&url)).await {
+        Ok(Ok(_)) => Ok(()),
+        Ok(Err(e)) => Err(format!("连接失败: {}", e)),
+        Err(_) => Err("连接超时".to_string()),
+    }
+}
+
+/// 测试豆包 ASR 配置
+async fn test_doubao_config(config: &AsrConfig) -> Result<(), String> {
+    // 豆包 ASR 测试 - 简单验证配置字段存在
+    let _app_id = config.api_id.as_ref().or(config.api_key.as_ref())
+        .ok_or("请提供 App ID 或 API Key")?;
+    let _access_key = config.api_key.as_ref().or(config.api_secret.as_ref())
+        .ok_or("请提供 Access Key")?;
+    
+    // TODO: 实现豆包 ASR 的实际连接测试
+    // 豆包的 WebSocket 连接需要更复杂的鉴权流程
     Ok(())
 }

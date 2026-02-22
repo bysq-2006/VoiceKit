@@ -47,6 +47,7 @@ pub fn run() {
             commands::settings::close_settings_window,
             commands::settings::get_config,
             commands::settings::sync_config,
+            commands::settings::test_asr_config,
         ])
         .setup(|app| {
             let state = app.state::<AppState>();

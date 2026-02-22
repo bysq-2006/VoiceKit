@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "tauridev": "npm run tauri dev",
+    "tauridev": "set RUST_LOG=info && npm run tauri dev",
     "tauribuild": "npm run tauri build",
     "dev": "vite",
     "build": "vue-tsc --noEmit && vite build",

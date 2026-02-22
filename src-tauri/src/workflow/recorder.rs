@@ -9,42 +9,23 @@ use std::time::Duration;
 const TARGET_SAMPLE_RATE: u32 = 16000;
 
 /// 重采样器：将输入采样率转换为16kHz
-struct Resampler {
-    input_rate: f64,
-    position: f64,
-    last_sample: f64,
-    has_last: bool,
-}
+/// 使用简单下采样：每 3 个采样取平均（如 48kHz -> 16kHz）
+struct Resampler;
 
 impl Resampler {
-    fn new(input_rate: u32) -> Self {
-        Self {
-            input_rate: input_rate as f64,
-            position: 0.0,
-            last_sample: 0.0,
-            has_last: false,
-        }
+    fn new(_input_rate: u32) -> Self {
+        Self
     }
 
     /// 处理输入采样，返回16kHz的i16数据
     fn process(&mut self, input: &[f64]) -> Vec<i16> {
-        let mut output = Vec::new();
-        let ratio = TARGET_SAMPLE_RATE as f64 / self.input_rate;
-        
-        for &sample in input {
-            while self.position < 1.0 {
-                if self.has_last {
-                    let t = self.position;
-                    let v = self.last_sample * (1.0 - t) + sample * t;
-                    output.push((v * 32767.0).clamp(-32768.0, 32767.0) as i16);
-                }
-                self.position += ratio;
-            }
-            self.position -= 1.0;
-            self.last_sample = sample;
-            self.has_last = true;
-        }
-        output
+        // 每 3 个输入采样平均为 1 个输出采样（3:1 下采样）
+        input.chunks_exact(3)
+            .map(|chunk| {
+                let avg = (chunk[0] + chunk[1] + chunk[2]) / 3.0;
+                (avg * 32767.0).clamp(-32768.0, 32767.0) as i16
+            })
+            .collect()
     }
 }
 

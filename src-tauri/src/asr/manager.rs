@@ -1,5 +1,6 @@
 use super::doubao::DoubaoAsr;
 use super::provider::AsrProvider;
+use super::xunfei::XunfeiAsr;
 use crate::models::buffer::{AudioBuffer, TextBuffer};
 use crate::models::config::AsrConfig;
 use std::sync::Arc;
@@ -37,14 +38,29 @@ impl AsrManager {
 
                 if is_recording && !was_recording {
                     log::info!("检测到录音开始，启动 ASR: {}", config.provider);
-                    
-                    // 创建豆包 ASR 提供商
-                    let provider: Arc<dyn AsrProvider> = Arc::new(DoubaoAsr::new(
-                        config.clone(), 
-                        self.audio_buffer.clone(), 
-                        self.text_buffer.clone()
-                    ));
-                    
+
+                    // 根据配置创建对应的 ASR 提供商
+                    let provider: Arc<dyn AsrProvider> = match config.provider.as_str() {
+                        "xunfei" => {
+                            match XunfeiAsr::new(
+                                config.clone(),
+                                self.audio_buffer.clone(),
+                                self.text_buffer.clone(),
+                            ) {
+                                Ok(xunfei) => Arc::new(xunfei),
+                                Err(e) => {
+                                    log::error!("讯飞 ASR 初始化失败: {}", e);
+                                    continue;
+                                }
+                            }
+                        }
+                        _ => Arc::new(DoubaoAsr::new(
+                            config.clone(),
+                            self.audio_buffer.clone(),
+                            self.text_buffer.clone(),
+                        )),
+                    };
+
                     // 在异步运行时中启动 ASR
                     let provider_clone = provider.clone();
                     tauri::async_runtime::spawn(async move {
@@ -52,7 +68,7 @@ impl AsrManager {
                             log::error!("ASR 启动失败: {}", e);
                         }
                     });
-                    
+
                     current_provider = Some(provider);
                     was_recording = true;
                 } else if !is_recording && was_recording {

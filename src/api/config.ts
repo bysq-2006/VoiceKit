@@ -3,17 +3,19 @@ import { invoke } from '@tauri-apps/api/core';
 /**
  * ASR 提供商类型
  */
-export type ASRProviderType = 'doubao';
+export type ASRProviderType = 'doubao' | 'xunfei';
 
 /**
- * ASR 配置
+ * ASR 配置（与后端 AsrConfig 对应）
  */
 export interface ASRConfig {
   provider: ASRProviderType;
-  app_id?: string;
-  access_key?: string;
+  // 通用字段（与后端一致）
+  api_id?: string;        // App ID / Access Key ID
+  api_key?: string;       // Access Key / API Key
+  api_secret?: string;    // API Secret（讯飞需要）
+  // 豆包特有
   resource_id?: string;
-  ws_url?: string;
 }
 
 /**

@@ -1,13 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
-
-interface ASRConfig {
-  provider: 'doubao';
-  app_id?: string;
-  access_key?: string;
-  resource_id?: string;
-}
+import AsrSettings, { type ASRConfig } from './settings/asr/AsrSettings.vue';
 
 interface AppConfig {
   shortcut: string;
@@ -18,24 +12,17 @@ interface AppConfig {
 const config = ref<AppConfig>({
   shortcut: 'Shift+E',
   auto_start: false,
-  asr: { provider: 'doubao', resource_id: 'volc.seedasr.sauc.concurrent' }
+  asr: { 
+    provider: 'doubao', 
+    api_id: '',
+    api_key: '',
+    resource_id: 'volc.seedasr.sauc.concurrent' 
+  }
 });
 
 const isRecording = ref(false);
 const msg = ref('');
-const testing = ref(false);
 let timeout: number;
-
-const providers = [
-  { key: 'doubao', name: '豆包 (Volcengine)' }
-];
-
-const resources = [
-  { key: 'volc.seedasr.sauc.concurrent', name: '豆包 2.0 - 并发版' },
-  { key: 'volc.seedasr.sauc.duration', name: '豆包 2.0 - 小时版' },
-  { key: 'volc.bigasr.sauc.concurrent', name: '豆包 1.0 - 并发版' },
-  { key: 'volc.bigasr.sauc.duration', name: '豆包 1.0 - 小时版' },
-];
 
 onMounted(async () => {
   try {
@@ -58,23 +45,6 @@ const save = async () => {
     showMsg('已保存');
   } catch (e) {
     showMsg('保存失败');
-  }
-};
-
-const testASR = async () => {
-  const { asr } = config.value;
-  if (!asr.app_id || !asr.access_key) {
-    return showMsg('请填写 App ID 和 Access Key', 2000);
-  }
-  testing.value = true;
-  showMsg('测试中...', 5000);
-  try {
-    await invoke('test_asr_config', { config: asr });
-    showMsg('连接成功！', 2000);
-  } catch (e: any) {
-    showMsg(e || '连接失败', 3000);
-  } finally {
-    testing.value = false;
   }
 };
 
@@ -105,11 +75,16 @@ const onKey = (e: KeyboardEvent) => {
   save();
 };
 
-
-
 const displayShortcut = computed(() => 
   isRecording.value ? '按下快捷键...' : config.value.shortcut.replace(/\+/g, ' + ')
 );
+
+const asrConfig = computed({
+  get: () => config.value.asr,
+  set: (val) => {
+    config.value.asr = val;
+  }
+});
 </script>
 
 <template>
@@ -136,29 +111,8 @@ const displayShortcut = computed(() =>
       </label>
     </div>
 
-    <!-- ASR 提供商选择 -->
-    <div class="item">
-      <div>
-        <div class="title">语音识别服务</div>
-      </div>
-      <select v-model="config.asr.provider" @change="save">
-        <option v-for="p in providers" :key="p.key" :value="p.key">{{ p.name }}</option>
-      </select>
-    </div>
-
-    <!-- 动态配置区 -->
-    <div class="config-area">
-      <template v-if="config.asr.provider === 'doubao'">
-        <input v-model="config.asr.app_id" placeholder="App ID" @blur="save" />
-        <input v-model="config.asr.access_key" type="password" placeholder="Access Key" @blur="save" />
-        <select v-model="config.asr.resource_id" @change="save">
-          <option v-for="r in resources" :key="r.key" :value="r.key">{{ r.name }}</option>
-        </select>
-        <div class="actions">
-          <button @click="testASR" :disabled="testing">{{ testing ? '测试中...' : '测试连接' }}</button>
-        </div>
-      </template>
-    </div>
+    <!-- ASR 设置 -->
+    <AsrSettings v-model="asrConfig" @save="save" />
 
     <!-- 提示 -->
     <div v-if="msg" class="toast">{{ msg }}</div>
@@ -258,53 +212,6 @@ const displayShortcut = computed(() =>
 
 .switch input:checked + span::before {
   transform: translateX(16px);
-}
-
-.config-area {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-select, input {
-  padding: 8px 12px;
-  border: 1px solid #dadce0;
-  border-radius: 4px;
-  font-size: 13px;
-  background: white;
-  width: 180px;
-}
-
-select:focus, input:focus {
-  outline: none;
-  border-color: #0d9488;
-}
-
-.config-area input, .config-area select {
-  width: 100%;
-  box-sizing: border-box;
-}
-
-.actions {
-  display: flex;
-  gap: 8px;
-  margin-top: 4px;
-}
-
-button {
-  flex: 1;
-  padding: 8px;
-  border: none;
-  border-radius: 4px;
-  background: #0d9488;
-  color: white;
-  font-size: 13px;
-  cursor: pointer;
-}
-
-button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
 }
 
 .toast {

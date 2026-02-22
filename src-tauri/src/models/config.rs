@@ -25,14 +25,18 @@ pub struct AsrConfig {
     /// ASR 提供商：doubao / xunfei
     #[serde(default = "default_asr_provider")]
     pub provider: String,
-    
+
     /// API 密钥
     #[serde(default)]
     pub api_key: Option<String>,
-    
+
     /// API 密钥 ID（某些服务需要）
     #[serde(default)]
     pub api_id: Option<String>,
+
+    /// API 密钥 Secret（讯飞 ASR 需要）
+    #[serde(default)]
+    pub api_secret: Option<String>,
 }
 
 impl Default for AsrConfig {
@@ -41,6 +45,7 @@ impl Default for AsrConfig {
             provider: default_asr_provider(),
             api_key: None,
             api_id: None,
+            api_secret: None,
         }
     }
 }
