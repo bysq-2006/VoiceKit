@@ -251,7 +251,7 @@ impl XunfeiAsr {
 }
 
 #[async_trait]
-impl super::provider::AsrProvider for XunfeiAsr {
+impl crate::asr::provider::AsrProvider for XunfeiAsr {
     async fn start(&self) -> Result<(), String> {
         log::info!("讯飞 ASR 开始");
 

@@ -1,6 +1,6 @@
-use super::doubao::DoubaoAsr;
 use super::provider::AsrProvider;
-use super::xunfei::XunfeiAsr;
+use super::providers::doubao::DoubaoAsr;
+use super::providers::xunfei::XunfeiAsr;
 use crate::models::buffer::{AudioBuffer, TextBuffer};
 use crate::models::config::AsrConfig;
 use std::sync::Arc;

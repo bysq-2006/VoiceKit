@@ -1,8 +1,7 @@
 //! ASR 模块
 
-mod doubao;
 mod manager;
 mod provider;
-mod xunfei;
+mod providers;
 
 pub use manager::init_asr_manager;

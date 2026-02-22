@@ -25,7 +25,7 @@ impl DoubaoAsr {
 }
 
 #[async_trait]
-impl super::provider::AsrProvider for DoubaoAsr {
+impl crate::asr::provider::AsrProvider for DoubaoAsr {
     async fn start(&self) -> Result<(), String> {
         log::info!("豆包 ASR 开始");
 
