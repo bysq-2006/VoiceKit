@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
+import PasswordInput from '../../PasswordInput.vue';
 
 interface DoubaoConfigData {
   api_key?: string;
@@ -55,11 +56,10 @@ const testConnection = async () => {
 
 <template>
   <div class="asr-config">
-    <input
-      :value="modelValue.api_key"
-      @input="e => updateField('api_key', (e.target as HTMLInputElement).value)"
+    <PasswordInput
+      :modelValue="modelValue.api_key || ''"
+      @update:modelValue="value => updateField('api_key', value)"
       @blur="$emit('save')"
-      type="password"
       placeholder="API Key"
     />
     <div class="hint">
@@ -79,21 +79,6 @@ const testConnection = async () => {
   display: flex;
   flex-direction: column;
   gap: 12px;
-}
-
-input {
-  padding: 8px 12px;
-  border: 1px solid #dadce0;
-  border-radius: 4px;
-  font-size: 13px;
-  background: white;
-  width: 100%;
-  box-sizing: border-box;
-}
-
-input:focus {
-  outline: none;
-  border-color: #0d9488;
 }
 
 .hint {

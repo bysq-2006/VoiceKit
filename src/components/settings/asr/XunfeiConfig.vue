@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
+import PasswordInput from '../../PasswordInput.vue';
 
 interface XunfeiConfigData {
   app_id?: string;
@@ -69,11 +70,10 @@ const testConnection = async () => {
       @blur="$emit('save')"
       placeholder="API Key"
     />
-    <input
-      :value="modelValue.api_secret"
-      @input="e => updateField('api_secret', (e.target as HTMLInputElement).value)"
+    <PasswordInput
+      :modelValue="modelValue.api_secret || ''"
+      @update:modelValue="value => updateField('api_secret', value)"
       @blur="$emit('save')"
-      type="password"
       placeholder="API Secret"
     />
     <div class="hint">
