@@ -1,15 +1,24 @@
 use crate::models::state::AppState;
-use std::sync::{LazyLock, Mutex};
-use std::thread;
-use std::time::Duration;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{Emitter, Manager};
 
-static DEBOUNCE_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+static LAST_TRIGGER: AtomicU64 = AtomicU64::new(0);
+const DEBOUNCE_MS: u64 = 200;
 
 fn try_run(f: impl FnOnce()) -> bool {
-    let Ok(_guard) = DEBOUNCE_LOCK.try_lock() else { return false };
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64;
+    
+    let last = LAST_TRIGGER.load(Ordering::SeqCst);
+    if now.saturating_sub(last) < DEBOUNCE_MS {
+        return false;
+    }
+    
+    LAST_TRIGGER.store(now, Ordering::SeqCst);
     f();
-    thread::sleep(Duration::from_millis(100));
     true
 }
 

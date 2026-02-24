@@ -34,9 +34,11 @@ onMounted(async () => {
     const oldState = isActive.value;
     isActive.value = newState;
     
-    // 播放音效：开始录音时播放音效
+    // 播放音效：开始录音时正向播放，结束录音时反向播放
     if (newState && !oldState) {
       playSound();
+    } else if (!newState && oldState) {
+      playSoundReverse();
     }
   });
 });
@@ -52,6 +54,31 @@ function playSound() {
   
   const source = audioContext.createBufferSource();
   source.buffer = audioBuffer;
+  source.connect(audioContext.destination);
+  source.start(0);
+}
+
+// 反向播放音效
+function playSoundReverse() {
+  if (!audioContext || !audioBuffer) return;
+  
+  // 创建反向的音频缓冲区
+  const sampleRate = audioBuffer.sampleRate;
+  const length = audioBuffer.length;
+  const numChannels = audioBuffer.numberOfChannels;
+  const reverseBuffer = audioContext.createBuffer(numChannels, length, sampleRate);
+  
+  // 反转每个声道的数据
+  for (let channel = 0; channel < numChannels; channel++) {
+    const forwardData = audioBuffer.getChannelData(channel);
+    const reverseData = reverseBuffer.getChannelData(channel);
+    for (let i = 0; i < length; i++) {
+      reverseData[i] = forwardData[length - 1 - i];
+    }
+  }
+  
+  const source = audioContext.createBufferSource();
+  source.buffer = reverseBuffer;
   source.connect(audioContext.destination);
   source.start(0);
 }
