@@ -280,7 +280,8 @@ impl XunfeiAsr {
 
         let self_clone = self.clone();
         tokio::spawn(async move {
-            let mut buf = vec![0i16; 3200];
+            // 讯飞推荐：每帧 30ms @ 16kHz = 480 samples
+            let mut buf = vec![0i16; 480];
             let mut frames = 0;
             let mut total_samples = 0;
 

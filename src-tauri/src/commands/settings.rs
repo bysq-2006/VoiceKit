@@ -81,16 +81,10 @@ pub fn sync_config(
     state: tauri::State<AppState>,
     new_config: AppConfig,
 ) -> Result<(), String> {
-    let old = state.config.lock().unwrap().clone();
+    let old = state.config.lock().unwrap().shortcut.clone();
     state.update_config(&app, new_config.clone())?;
     
-    // 如果 ASR 提供商变更，重置缓存的 Provider
-    if old.asr.provider != new_config.asr.provider {
-        *state.current_provider.write().unwrap() = None;
-        log::info!("ASR 提供商变更: {} -> {},已重置缓存", old.asr.provider, new_config.asr.provider);
-    }
-    
-    if old.shortcut != new_config.shortcut {
+    if old != new_config.shortcut {
         let _ = crate::utils::shortcut::update_shortcut(&app, &new_config.shortcut);
     }
     Ok(())

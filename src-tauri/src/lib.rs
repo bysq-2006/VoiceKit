@@ -120,7 +120,8 @@ pub fn run() {
             // 启动输入模拟器（从 TextBuffer 读取）
             workflow::input_simulator::init_input_simulator(state_clone.clone());
             
-            log::info!("ASR 管理器已就绪，等待 VAD 模块调用");
+            // 启动 ASR 控制器（根据录音状态控制 ASR 启停）
+            workflow::asr_controller::init_asr_controller(state_clone.clone());
 
             Ok(())
         })
