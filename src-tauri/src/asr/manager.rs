@@ -3,6 +3,7 @@ use crate::models::config::AppConfig;
 use std::sync::{Arc, Mutex};
 
 /// ASR 提供商枚举（替代 trait object，避免 async-trait 依赖）
+#[derive(Clone)]
 pub enum AsrProvider {
     Xunfei(super::providers::xunfei::XunfeiAsr),
     Doubao(super::providers::doubao::DoubaoAsr),
@@ -26,7 +27,7 @@ impl AsrProvider {
 
 /// ASR 管理器
 /// 
-/// 职责：根据配置创建并启动对应的 ASR 提供商
+/// 职责：管理 ASR Provider 生命周期，缓存实例避免重复创建
 pub struct AsrManager {
     audio_buffer: Arc<AudioBuffer>,
     text_buffer: Arc<TextBuffer>,
@@ -46,26 +47,25 @@ impl AsrManager {
         }
     }
 
-    /// 根据当前配置创建 ASR 提供商
+    /// 强制创建新的 Provider
     pub fn create_provider(&self) -> Result<AsrProvider, String> {
         let asr_config = self.config.lock().unwrap().asr.clone();
         
         match asr_config.provider.as_str() {
             "xunfei" => {
-                let provider = super::providers::xunfei::XunfeiAsr::new(
+                let p = super::providers::xunfei::XunfeiAsr::new(
                     asr_config.xunfei.clone(),
                     self.audio_buffer.clone(),
                     self.text_buffer.clone(),
                 )?;
-                Ok(AsrProvider::Xunfei(provider))
+                Ok(AsrProvider::Xunfei(p))
             }
             _ => {
-                let provider = super::providers::doubao::DoubaoAsr::new(
+                Ok(AsrProvider::Doubao(super::providers::doubao::DoubaoAsr::new(
                     asr_config.doubao.clone(),
                     self.audio_buffer.clone(),
                     self.text_buffer.clone(),
-                );
-                Ok(AsrProvider::Doubao(provider))
+                )))
             }
         }
     }

@@ -3,6 +3,7 @@ use crate::models::config::DoubaoConfig;
 use std::sync::Arc;
 
 /// 豆包 ASR 提供商
+#[derive(Clone)]
 pub struct DoubaoAsr {
     _config: DoubaoConfig,
     _audio_buffer: Arc<AudioBuffer>,

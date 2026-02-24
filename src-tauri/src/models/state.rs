@@ -1,16 +1,17 @@
-use std::sync::Mutex;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, RwLock};
 use crate::models::config::AppConfig;
 use crate::models::buffer::{AudioBuffer, TextBuffer};
-use crate::asr::manager::AsrManager;
+use crate::asr::manager::{AsrManager, AsrProvider};
 
 pub struct AppState {
     pub is_recording: Arc<Mutex<bool>>,
     pub config: Arc<Mutex<AppConfig>>,
     pub audio_buffer: Arc<AudioBuffer>,
     pub text_buffer: Arc<TextBuffer>,
-    /// ASR 管理器，供外部模块（如 VAD）调用
+    /// ASR 管理器
     pub asr_manager: Arc<AsrManager>,
+    /// 当前缓存的 ASR Provider（避免重复创建）
+    pub current_provider: Arc<RwLock<Option<AsrProvider>>>,
 }
 
 impl Clone for AppState {
@@ -21,6 +22,7 @@ impl Clone for AppState {
             audio_buffer: self.audio_buffer.clone(),
             text_buffer: self.text_buffer.clone(),
             asr_manager: self.asr_manager.clone(),
+            current_provider: self.current_provider.clone(),
         }
     }
 }
@@ -38,6 +40,7 @@ impl AppState {
             audio_buffer,
             text_buffer,
             asr_manager,
+            current_provider: Arc::new(RwLock::new(None)),
         }
     }
     
