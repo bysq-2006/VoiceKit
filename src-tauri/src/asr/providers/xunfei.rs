@@ -1,6 +1,5 @@
 use crate::models::buffer::{AudioBuffer, TextBuffer};
 use crate::models::config::XunfeiConfig;
-use async_trait::async_trait;
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use futures::{SinkExt, StreamExt};
 use hmac::{Hmac, Mac};
@@ -259,9 +258,8 @@ impl XunfeiAsr {
     }
 }
 
-#[async_trait]
-impl crate::asr::provider::AsrProvider for XunfeiAsr {
-    async fn start(&self) -> Result<(), String> {
+impl XunfeiAsr {
+    pub async fn start(&self) -> Result<(), String> {
         log::info!("讯飞 ASR 开始");
 
         let url = self.create_url();
@@ -354,7 +352,7 @@ impl crate::asr::provider::AsrProvider for XunfeiAsr {
         Ok(())
     }
 
-    async fn stop(&self) {
+    pub async fn stop(&self) {
         log::info!("讯飞 ASR 停止");
         self.is_connected.store(false, Ordering::SeqCst);
 

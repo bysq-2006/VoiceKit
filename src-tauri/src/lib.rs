@@ -5,17 +5,18 @@ mod tray;
 mod utils;
 mod workflow;
 
+use models::buffer::{AudioBuffer, TextBuffer};
+use models::config::AppConfig;
 use models::state::AppState;
 use tauri::{Emitter, Manager};
 use tauri_plugin_global_shortcut::ShortcutState;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     env_logger::init();
     
     tauri::Builder::default()
-        .manage(AppState::new())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, None))
@@ -50,17 +51,40 @@ pub fn run() {
             commands::settings::test_asr_config,
         ])
         .setup(|app| {
+            // 创建共享的资源
+            let config = Arc::new(Mutex::new(AppConfig::default()));
+            let audio_buffer = Arc::new(AudioBuffer::new());
+            let text_buffer = Arc::new(TextBuffer::new());
+            
+            // 初始化 ASR 管理器（被动模式，无监控线程）
+            let asr_manager = asr::init_asr_manager(
+                audio_buffer.clone(),
+                text_buffer.clone(),
+                config.clone(),
+            );
+            
+            // 创建并管理 AppState
+            let state = AppState::new(
+                asr_manager,
+                audio_buffer,
+                text_buffer,
+                config,
+            );
+            app.manage(state);
+            
+            // 初始化配置
             let state = app.state::<AppState>();
             if let Err(e) = state.init_config(&app.handle()) {
                 log::error!("初始化配置失败: {}", e);
             }
             
-            // 克隆配置和状态，避免借用冲突
-            let config = state.config.lock().unwrap();
-            let shortcut_str = config.shortcut.clone();
-            drop(config);
+            // 读取快捷键配置
+            let shortcut_str = {
+                let config = state.config.lock().unwrap();
+                config.shortcut.clone()
+            };
             
-            // 克隆 AppState 用于录音监控线程
+            // 克隆 AppState 用于其他模块
             let state_clone = Arc::new(state.inner().clone());
             
             // 注册快捷键，失败时使用默认快捷键
@@ -95,17 +119,8 @@ pub fn run() {
             
             // 启动输入模拟器（从 TextBuffer 读取）
             workflow::input_simulator::init_input_simulator(state_clone.clone());
-
-            // 启动 ASR 管理器（根据配置选择 ASR 提供商）
-            let config = state_clone.config.lock().unwrap();
-            let asr_config = config.asr.clone();
-            drop(config);
-            asr::init_asr_manager(
-                state_clone.audio_buffer.clone(),
-                state_clone.text_buffer.clone(),
-                state_clone.is_recording.clone(),
-                asr_config,
-            );
+            
+            log::info!("ASR 管理器已就绪，等待 VAD 模块调用");
 
             Ok(())
         })

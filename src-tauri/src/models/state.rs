@@ -2,22 +2,42 @@ use std::sync::Mutex;
 use std::sync::Arc;
 use crate::models::config::AppConfig;
 use crate::models::buffer::{AudioBuffer, TextBuffer};
+use crate::asr::manager::AsrManager;
 
-#[derive(Clone)]
 pub struct AppState {
     pub is_recording: Arc<Mutex<bool>>,
     pub config: Arc<Mutex<AppConfig>>,
     pub audio_buffer: Arc<AudioBuffer>,
     pub text_buffer: Arc<TextBuffer>,
+    /// ASR 管理器，供外部模块（如 VAD）调用
+    pub asr_manager: Arc<AsrManager>,
+}
+
+impl Clone for AppState {
+    fn clone(&self) -> Self {
+        Self {
+            is_recording: self.is_recording.clone(),
+            config: self.config.clone(),
+            audio_buffer: self.audio_buffer.clone(),
+            text_buffer: self.text_buffer.clone(),
+            asr_manager: self.asr_manager.clone(),
+        }
+    }
 }
 
 impl AppState {
-    pub fn new() -> Self {
+    pub fn new(
+        asr_manager: Arc<AsrManager>,
+        audio_buffer: Arc<AudioBuffer>,
+        text_buffer: Arc<TextBuffer>,
+        config: Arc<Mutex<AppConfig>>,
+    ) -> Self {
         Self {
             is_recording: Arc::new(Mutex::new(false)),
-            config: Arc::new(Mutex::new(AppConfig::default())),
-            audio_buffer: Arc::new(AudioBuffer::new()),
-            text_buffer: Arc::new(TextBuffer::new()),
+            config,
+            audio_buffer,
+            text_buffer,
+            asr_manager,
         }
     }
     

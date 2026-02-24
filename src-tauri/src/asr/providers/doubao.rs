@@ -1,6 +1,5 @@
 use crate::models::buffer::{AudioBuffer, TextBuffer};
 use crate::models::config::DoubaoConfig;
-use async_trait::async_trait;
 use std::sync::Arc;
 
 /// 豆包 ASR 提供商
@@ -24,9 +23,8 @@ impl DoubaoAsr {
     }
 }
 
-#[async_trait]
-impl crate::asr::provider::AsrProvider for DoubaoAsr {
-    async fn start(&self) -> Result<(), String> {
+impl DoubaoAsr {
+    pub async fn start(&self) -> Result<(), String> {
         log::info!("豆包 ASR 开始");
 
         // TODO: 实现豆包 WebSocket ASR 连接
@@ -38,7 +36,7 @@ impl crate::asr::provider::AsrProvider for DoubaoAsr {
         Ok(())
     }
 
-    async fn stop(&self) {
+    pub async fn stop(&self) {
         log::info!("豆包 ASR 停止");
         // TODO: 关闭 WebSocket 连接
     }

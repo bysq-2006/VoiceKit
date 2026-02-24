@@ -1,7 +1,6 @@
 //! ASR 模块
 
-mod manager;
-mod provider;
+pub mod manager;
 mod providers;
 
-pub use manager::init_asr_manager;
+pub use manager::{init_asr_manager, AsrManager, AsrProvider};
