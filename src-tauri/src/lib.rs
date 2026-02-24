@@ -8,7 +8,7 @@ mod workflow;
 use models::buffer::{AudioBuffer, TextBuffer};
 use models::config::AppConfig;
 use models::state::AppState;
-use tauri::{Emitter, Manager};
+use tauri::Manager;
 use tauri_plugin_global_shortcut::ShortcutState;
 use std::sync::{Arc, Mutex};
 
@@ -26,14 +26,7 @@ pub fn run() {
                     if event.state == ShortcutState::Pressed {
                         commands::window::show_window(app.clone());
                         let state = app.state::<AppState>();
-                        let mut is_recording = state.is_recording.lock().unwrap();
-                        *is_recording = !*is_recording;
-                        let new_state = *is_recording;
-                        drop(is_recording);
-                        
-                        if let Some(window) = app.get_webview_window("main") {
-                            let _ = window.emit("recording-state-changed", new_state);
-                        }
+                        crate::utils::recording::toggle(&state, &app);
                     }
                 })
                 .build(),
@@ -122,6 +115,10 @@ pub fn run() {
             
             // 启动 ASR 控制器（根据录音状态控制 ASR 启停）
             workflow::asr_controller::init_asr_controller(state_clone.clone());
+            
+            // 启动全局输入监听（录音状态下任意输入取消录音）
+            let app_handle = app.handle().clone();
+            workflow::global_input::init(state_clone.clone(), app_handle);
 
             Ok(())
         })

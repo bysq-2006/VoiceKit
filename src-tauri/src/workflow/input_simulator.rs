@@ -27,7 +27,7 @@ impl InputSimulator {
                 match app_state.text_buffer.read() {
                     Some(text) => {
                         log::info!("从 TextBuffer 读取到文字: {}", text);
-                        self.type_text(&mut enigo, &text);
+                        self.type_text(&mut enigo, &text, &app_state);
                     }
                     None => {
                         // 队列已结束（finish 被调用），清空等待状态继续下一轮
@@ -40,7 +40,11 @@ impl InputSimulator {
     }
 
     /// 模拟键盘输入文字
-    fn type_text(&self, enigo: &mut Enigo, text: &str) {
+    fn type_text(&self, enigo: &mut Enigo, text: &str, app_state: &Arc<AppState>) {
+        use std::sync::atomic::Ordering;
+        // 设置模拟输入标志
+        app_state.is_simulating_input.store(true, Ordering::SeqCst);
+        
         for ch in text.chars() {
             // 处理换行符
             if ch == '\n' {
@@ -58,6 +62,9 @@ impl InputSimulator {
             // 添加微小延迟，模拟真实输入
             thread::sleep(Duration::from_millis(10));
         }
+        
+        // 清除模拟输入标志
+        app_state.is_simulating_input.store(false, Ordering::SeqCst);
         
         log::info!("输入完成: {}", text);
     }
