@@ -4,6 +4,7 @@ import { invoke } from '@tauri-apps/api/core';
 import PasswordInput from '../../PasswordInput.vue';
 
 interface DoubaoConfigData {
+  app_id?: string;
   api_key?: string;
 }
 
@@ -31,9 +32,9 @@ const showMsg = (text: string, time = 1500) => {
 };
 
 const testConnection = async () => {
-  const { api_key } = props.modelValue;
-  if (!api_key) {
-    return showMsg('请填写 API Key', 2000);
+  const { app_id, api_key } = props.modelValue;
+  if (!app_id || !api_key) {
+    return showMsg('请填写 App ID 和 API Key', 2000);
   }
   testing.value = true;
   showMsg('测试中...', 5000);
@@ -56,6 +57,12 @@ const testConnection = async () => {
 
 <template>
   <div class="asr-config">
+    <input
+      :value="modelValue.app_id"
+      @input="e => updateField('app_id', (e.target as HTMLInputElement).value)"
+      @blur="$emit('save')"
+      placeholder="App ID"
+    />
     <PasswordInput
       :modelValue="modelValue.api_key || ''"
       @update:modelValue="value => updateField('api_key', value)"
@@ -63,7 +70,7 @@ const testConnection = async () => {
       placeholder="API Key"
     />
     <div class="hint">
-      <span>豆包语音识别服务</span>
+      <span>豆包语音识别服务（火山引擎）</span>
     </div>
     <div class="actions">
       <button @click="testConnection" :disabled="testing">
@@ -79,6 +86,21 @@ const testConnection = async () => {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+input {
+  padding: 8px 12px;
+  border: 1px solid #dadce0;
+  border-radius: 4px;
+  font-size: 13px;
+  background: white;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+input:focus {
+  outline: none;
+  border-color: #0d9488;
 }
 
 .hint {

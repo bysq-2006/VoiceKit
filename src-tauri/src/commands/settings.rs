@@ -150,10 +150,41 @@ async fn test_xunfei_config(config: &XunfeiConfig) -> Result<(), String> {
 
 /// 测试豆包 ASR 配置
 async fn test_doubao_config(config: &DoubaoConfig) -> Result<(), String> {
-    // 豆包 ASR 测试 - 简单验证配置字段存在
-    let _api_key = config.api_key.as_ref().ok_or("请提供 API Key")?;
+    use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
+    use tokio_tungstenite::connect_async;
+
+    const DOUBAO_WS_URL: &str = "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async";
+    const RESOURCE_ID: &str = "volc.seedasr.sauc.concurrent";
+
+    let app_id = config.app_id.as_ref().ok_or("请提供 App ID")?;
+    let api_key = config.api_key.as_ref().ok_or("请提供 API Key")?;
+    let connect_id = uuid::Uuid::new_v4().to_string();
     
-    // TODO: 实现豆包 ASR 的实际连接测试
-    // 豆包的 WebSocket 连接需要更复杂的鉴权流程
-    Ok(())
+    // 生成 WebSocket Key (RFC 6455)
+    let mut ws_key_bytes = [0u8; 16];
+    rand::RngCore::fill_bytes(&mut rand::thread_rng(), &mut ws_key_bytes);
+    let ws_key = BASE64.encode(&ws_key_bytes);
+
+    // 构建带鉴权 Header 的 WebSocket 请求
+    let request = http::Request::builder()
+        .method("GET")
+        .uri(DOUBAO_WS_URL)
+        .header("Host", "openspeech.bytedance.com")
+        .header("Connection", "Upgrade")
+        .header("Upgrade", "websocket")
+        .header("Sec-WebSocket-Key", ws_key)
+        .header("Sec-WebSocket-Version", "13")
+        .header("X-Api-App-Key", app_id.clone())
+        .header("X-Api-Access-Key", api_key.clone())
+        .header("X-Api-Resource-Id", RESOURCE_ID)
+        .header("X-Api-Connect-Id", connect_id)
+        .body(())
+        .map_err(|e| format!("构建请求失败: {}", e))?;
+
+    // 尝试建立连接
+    match tokio::time::timeout(std::time::Duration::from_secs(5), connect_async(request)).await {
+        Ok(Ok(_)) => Ok(()),
+        Ok(Err(e)) => Err(format!("连接失败: {}", e)),
+        Err(_) => Err("连接超时".to_string()),
+    }
 }

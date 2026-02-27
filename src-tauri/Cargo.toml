@@ -45,6 +45,8 @@ sha2 = "0.10"
 httpdate = "1"
 urlencoding = "2"
 base64 = "0.22"
+rand = "0.8"
+http = "1"
 
 # Windows API
 [target.'cfg(windows)'.dependencies]

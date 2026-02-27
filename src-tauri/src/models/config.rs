@@ -46,6 +46,9 @@ impl Default for AsrConfig {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct DoubaoConfig {
     #[serde(default)]
+    pub app_id: Option<String>,
+
+    #[serde(default)]
     pub api_key: Option<String>,
 }
 

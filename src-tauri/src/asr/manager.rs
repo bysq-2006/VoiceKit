@@ -60,13 +60,15 @@ impl AsrManager {
                 )?;
                 Ok(AsrProvider::Xunfei(p))
             }
-            _ => {
-                Ok(AsrProvider::Doubao(super::providers::doubao::DoubaoAsr::new(
+            "doubao" => {
+                let p = super::providers::doubao::DoubaoAsr::new(
                     asr_config.doubao.clone(),
                     self.audio_buffer.clone(),
                     self.text_buffer.clone(),
-                )))
+                )?;
+                Ok(AsrProvider::Doubao(p))
             }
+            _ => Err(format!("未知的 ASR 提供商: {}", asr_config.provider))
         }
     }
 }
