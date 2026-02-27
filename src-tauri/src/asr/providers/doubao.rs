@@ -7,9 +7,9 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 
-// 并发版配置（用户开通的是并发版，只是配额可能用完了）
+// 小时版配置（更便宜，按使用时长计费）
 const WS_URL: &str = "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async";
-const RESOURCE_ID: &str = "volc.seedasr.sauc.concurrent";
+const RESOURCE_ID: &str = "volc.seedasr.sauc.duration";
 
 #[derive(Clone)]
 pub struct DoubaoAsr {
@@ -38,7 +38,7 @@ struct ResponsePayload {
     #[serde(default)]
     error: Option<String>,
     #[serde(default)]
-    result: Vec<ResultItem>,
+    result: Option<ResultItem>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -102,7 +102,7 @@ impl DoubaoAsr {
         let payload = RequestPayload {
             user: serde_json::json!({"uid": "user"}),
             audio: serde_json::json!({
-                "format": "raw", "rate": 16000, "bits": 16, "channel": 1, "codec": "raw"
+                "format": "pcm", "rate": 16000, "bits": 16, "channel": 1, "codec": "raw"
             }),
             request: serde_json::json!({
                 "model_name": "bigmodel", "reqid": reqid, "sequence": 1,
@@ -147,27 +147,44 @@ impl DoubaoAsr {
         let hex: String = data.iter().take(16).map(|b| format!("{:02x}", b)).collect::<Vec<_>>().join(" ");
         log::info!("[豆包] 收到: {} bytes, hex={}", data.len(), hex);
         
-        if data.len() < 12 { 
-            log::warn!("[豆包] 数据太短: {} < 12", data.len());
+        if data.len() < 8 { 
+            log::warn!("[豆包] 数据太短: {} < 8", data.len());
             return None; 
         }
         
         let header_size = (data[0] & 0x0F) as usize * 4;
+        let flags = (data[1] & 0x0F) as u8; // 获取 message type specific flags
         
-        // 服务端响应格式: header(header_size) + sequence(4) + payload_size(4) + payload
-        let seq_offset = header_size;
-        let size_offset = header_size + 4;
-        let payload_offset = header_size + 8;
+        // 根据 flags 判断是否有 sequence number
+        // flags: 0b0000 = 无sequence, 0b0001 = 有sequence(正), 0b0010/0b0011 = 最后一包
+        let has_sequence = (flags & 0x01) != 0 || flags == 0x03;
         
-        if data.len() < payload_offset {
-            log::warn!("[豆包] 数据不足以解析头: {} < {}", data.len(), payload_offset);
-            return None;
-        }
+        let (seq, payload_len, payload_offset) = if has_sequence {
+            // 格式: header + sequence(4) + payload_size(4) + payload
+            if data.len() < header_size + 8 {
+                log::warn!("[豆包] 数据不足以解析头(含seq): {} < {}", data.len(), header_size + 8);
+                return None;
+            }
+            let seq_offset = header_size;
+            let size_offset = header_size + 4;
+            let payload_offset = header_size + 8;
+            let seq = i32::from_be_bytes([data[seq_offset], data[seq_offset+1], data[seq_offset+2], data[seq_offset+3]]);
+            let payload_len = u32::from_be_bytes([data[size_offset], data[size_offset+1], data[size_offset+2], data[size_offset+3]]) as usize;
+            (seq, payload_len, payload_offset)
+        } else {
+            // 格式: header + payload_size(4) + payload (无sequence)
+            if data.len() < header_size + 4 {
+                log::warn!("[豆包] 数据不足以解析头(无seq): {} < {}", data.len(), header_size + 4);
+                return None;
+            }
+            let size_offset = header_size;
+            let payload_offset = header_size + 4;
+            let payload_len = u32::from_be_bytes([data[size_offset], data[size_offset+1], data[size_offset+2], data[size_offset+3]]) as usize;
+            (0, payload_len, payload_offset) // seq = 0 表示无sequence
+        };
         
-        let seq = i32::from_be_bytes([data[seq_offset], data[seq_offset+1], data[seq_offset+2], data[seq_offset+3]]);
-        let payload_len = u32::from_be_bytes([data[size_offset], data[size_offset+1], data[size_offset+2], data[size_offset+3]]) as usize;
-        
-        log::info!("[豆包] 解析: header_size={}, seq={}, payload_len={}", header_size, seq, payload_len);
+        log::info!("[豆包] 解析: header_size={}, flags={:04b}, has_seq={}, seq={}, payload_len={}", 
+                   header_size, flags, has_sequence, seq, payload_len);
         
         if data.len() < payload_offset + payload_len { 
             log::warn!("[豆包] 数据不完整: {} < {}", data.len(), payload_offset + payload_len);
@@ -208,13 +225,14 @@ impl DoubaoAsr {
                                 break;
                             }
                             
-                            if resp.code != 1000 {
+                            // code=0 或 code=1000 都表示成功
+                            if resp.code != 0 && resp.code != 1000 {
                                 log::error!("[豆包] 错误码: {}", resp.code);
                                 if resp.code >= 2000 { connected.store(false, Ordering::SeqCst); }
                                 continue;
                             }
 
-                            for result in &resp.result {
+                            if let Some(result) = &resp.result {
                                 log::info!("[豆包] 结果: text='{}', utterances={}", result.text, result.utterances.len());
                                 for utt in &result.utterances {
                                     let mut c = cache.lock().await;
@@ -284,7 +302,8 @@ impl DoubaoAsr {
         let this = self.clone();
         tokio::spawn(async move {
             log::info!("[豆包] 发送任务启动");
-            let mut buf = vec![0i16; 480];
+            // 豆包建议单包 200ms 音频最优: 16000Hz * 0.2s = 3200 samples
+            let mut buf = vec![0i16; 3200];
             let mut seq: i32 = 2;
             let mut total = 0usize;
 
@@ -312,6 +331,9 @@ impl DoubaoAsr {
                     break;
                 }
                 seq += 1;
+                
+                // 控制发包间隔约 100-200ms
+                tokio::time::sleep(tokio::time::Duration::from_millis(150)).await;
 
                 if this.audio_buffer.is_finished() && this.audio_buffer.is_empty() { break; }
             }
