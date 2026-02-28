@@ -1,7 +1,67 @@
-# Tauri + Vue + TypeScript
+# VoiceKit
 
-This template should help get you started developing with Vue 3 and TypeScript in Vite. The template uses Vue 3 `<script setup>` SFCs, check out the [script setup docs](https://v3.vuejs.org/api/sfc-script-setup.html#sfc-script-setup) to learn more.
+一个极简的桌面语音输入工具。按住快捷键说话，松开后自动将识别结果输入到光标处。
 
-## Recommended IDE Setup
+---
 
-- [VS Code](https://code.visualstudio.com/) + [Vue - Official](https://marketplace.visualstudio.com/items?itemName=Vue.volar) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+## 使用
+
+下载 `VoiceKit.exe`，双击运行。
+
+- **默认快捷键**：`Shift + E`
+
+设置内可修改快捷键。
+
+---
+
+## 配置
+
+首次使用需配置语音识别服务，支持豆包、讯飞两家。
+
+### 豆包（推荐）
+
+需要：App ID、API Key
+
+| 步骤 | 操作 |
+|------|------|
+| 1 | 访问 [火山引擎](https://console.volcengine.com/speech/app) 注册账号 |
+| 2 | 控制台搜索「语音识别」，点击「开通服务」|
+| 3 | 左侧「应用管理」→「创建应用」→ 复制 **App ID** |
+| 4 | 右上角「密钥管理」→ 创建并复制 **Access Token**（即 API Key）|
+| 5 | 填入软件设置，点击「测试连接」验证 |
+
+> 新用户有 20小时 免费额度。
+
+### 讯飞
+
+需要：App ID、API Key、API Secret
+
+| 步骤 | 操作 |
+|------|------|
+| 1 | 访问 [讯飞开放平台](https://www.xfyun.cn/) 注册账号 |
+| 2 | 控制台「创建应用」|
+| 3 | 开通「语音听写」服务 |
+| 4 | 应用页面复制 **App ID**、**API Key**、**API Secret** |
+| 5 | 填入软件设置，点击「测试连接」验证 |
+
+> 新用户有 5000 次免费调用额度。
+
+---
+
+## 设置项
+
+| 选项 | 说明 |
+|------|------|
+| 快捷键 | 触发语音输入的组合键，默认 `Shift+E` |
+| 开机自启 | 登录 Windows 后自动启动 |
+| 识别服务 | 切换豆包 / 讯飞 |
+
+---
+
+## 技术栈
+
+Tauri + Vue 3 + Rust
+
+---
+
+MIT License
