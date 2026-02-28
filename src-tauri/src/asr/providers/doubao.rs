@@ -18,7 +18,8 @@ pub struct DoubaoAsr {
     text_buffer: Arc<TextBuffer>,
     ws_sink: Arc<Mutex<Option<tokio::sync::mpsc::Sender<Message>>>>,
     is_connected: Arc<AtomicBool>,
-    text_cache: Arc<Mutex<String>>,
+    /// 记录已输出的 definite 句子，避免重复
+    output_utterances: Arc<Mutex<std::collections::HashSet<String>>>,
 }
 
 #[derive(Serialize)]
@@ -60,7 +61,7 @@ impl DoubaoAsr {
             text_buffer,
             ws_sink: Arc::new(Mutex::new(None)),
             is_connected: Arc::new(AtomicBool::new(false)),
-            text_cache: Arc::new(Mutex::new(String::new())),
+            output_utterances: Arc::new(Mutex::new(std::collections::HashSet::new())),
         })
     }
 
@@ -147,11 +148,10 @@ impl DoubaoAsr {
     async fn start_listening(&self, stream: futures::stream::SplitStream<tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>>) {
         let text_buf = self.text_buffer.clone();
         let connected = self.is_connected.clone();
-        let cache = self.text_cache.clone();
+        let output_set = self.output_utterances.clone();
 
         tokio::spawn(async move {
             futures::pin_mut!(stream);
-            // 关键修复：处理所有消息类型，不只是 Binary
             while let Some(msg_result) = stream.next().await {
                 match msg_result {
                     Ok(Message::Binary(data)) => {
@@ -162,33 +162,26 @@ impl DoubaoAsr {
                             }
 
                             if let Some(result) = &resp.result {
-                                if let Some(utt) = result.utterances.last() {
-                                    let mut c = cache.lock().await;
-                                    
-                                    // 增量计算
-                                    let text = if utt.text.starts_with(&*c) && !c.is_empty() {
-                                        &utt.text[c.len()..]
-                                    } else if !c.is_empty() {
-                                        let common = c.chars().zip(utt.text.chars())
-                                            .take_while(|(a, b)| a == b).count();
-                                        let pos = utt.text.char_indices().nth(common).map(|(i, _)| i).unwrap_or(0);
-                                        &utt.text[pos..]
-                                    } else {
-                                        &utt.text
-                                    };
-                                    
-                                    if !text.is_empty() { text_buf.write(text.to_string()); }
-                                    *c = utt.text.clone();
-                                    if utt.definite { c.clear(); }
-                                } else if !result.text.is_empty() {
-                                    text_buf.write(result.text.clone());
+                                // 只输出 definite=true 的完整句子
+                                for utt in &result.utterances {
+                                    if utt.definite {
+                                        let mut set = output_set.lock().await;
+                                        // 避免重复输出同一句子
+                                        if set.insert(utt.text.clone()) {
+                                            text_buf.write(utt.text.clone());
+                                        }
+                                    }
+                                }
+                                
+                                // 会话结束，清空记录
+                                if seq < 0 {
+                                    output_set.lock().await.clear();
                                 }
                             }
-                            if seq < 0 { cache.lock().await.clear(); }
                         }
                     }
                     Ok(Message::Close(_)) => break,
-                    Ok(_) => {} // Ping/Pong 等忽略
+                    Ok(_) => {}
                     Err(_) => break,
                 }
             }
@@ -250,6 +243,6 @@ impl DoubaoAsr {
     pub async fn stop(&self) {
         self.is_connected.store(false, Ordering::SeqCst);
         *self.ws_sink.lock().await = None;
-        self.text_cache.lock().await.clear();
+        self.output_utterances.lock().await.clear();
     }
 }
