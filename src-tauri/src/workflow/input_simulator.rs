@@ -38,7 +38,7 @@ impl InputSimulator {
             ch => {
                 // 普通字符
                 let _ = enigo.text(&ch.to_string());
-                thread::sleep(Duration::from_millis(50));
+                thread::sleep(Duration::from_millis(20));
             }
         }
 
