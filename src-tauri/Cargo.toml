@@ -47,6 +47,7 @@ urlencoding = "2"
 base64 = "0.22"
 rand = "0.8"
 http = "1"
+chrono = "0.4"
 
 # Windows API
 [target.'cfg(windows)'.dependencies]
