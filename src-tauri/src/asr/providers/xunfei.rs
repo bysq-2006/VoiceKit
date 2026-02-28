@@ -153,13 +153,14 @@ impl XunfeiAsr {
                         }
                         if let Some(text) = data.payload.and_then(|p| p.result)
                             .and_then(|r| Self::parse_result(&r.text)) {
+                            log::info!("讯飞原始文本: {}", text);
                             let cache = text_cache.clone();
                             let buf = text_buffer.clone();
                             let mut c = cache.lock().await;
                             let to_send = if text.starts_with(&*c) && !c.is_empty() {
                                 text[c.len()..].to_string()
                             } else { text.clone() };
-                            if !to_send.is_empty() { buf.write(to_send); }
+                            if !to_send.is_empty() { buf.push_text(&to_send); }
                             *c = text;
                         }
                         if data.header.status == 2 {

@@ -17,45 +17,27 @@ impl InputSimulator {
                 .expect("Failed to create Enigo instance");
 
             loop {
-                match app_state.text_buffer.read() {
-                    Some(text) => self.type_text(&mut enigo, &text, &app_state),
-                    None => thread::sleep(Duration::from_millis(50)),
+                match app_state.text_buffer.pop() {
+                    Some(ch) => self.process_char(&mut enigo, ch, &app_state),
+                    None => break,
                 }
             }
         });
     }
 
-    fn type_text(&self, enigo: &mut Enigo, text: &str, app_state: &Arc<AppState>) {
+    fn process_char(&self, enigo: &mut Enigo, ch: char, app_state: &Arc<AppState>) {
         use std::sync::atomic::Ordering;
         app_state.is_simulating_input.store(true, Ordering::SeqCst);
 
-        let chars: Vec<char> = text.chars().collect();
-        let mut i = 0;
-
-        while i < chars.len() {
-            match chars[i] {
-                // 批量退格标记：\x01 + 4字节大端count
-                '\x01' if i + 4 < chars.len() => {
-                    let count = ((chars[i + 1] as u32) << 24)
-                        | ((chars[i + 2] as u32) << 16)
-                        | ((chars[i + 3] as u32) << 8)
-                        | (chars[i + 4] as u32);
-                    for _ in 0..count {
-                        let _ = enigo.key(enigo::Key::Backspace, Direction::Click);
-                    }
-                    i += 5;
-                }
-                // 换行
-                '\n' => {
-                    let _ = enigo.key(enigo::Key::Return, Direction::Click);
-                    i += 1;
-                }
+        match ch {
+            '\x08' => {
+                // 退格键 - 不等待
+                let _ = enigo.key(enigo::Key::Backspace, Direction::Click);
+            }
+            ch => {
                 // 普通字符
-                ch => {
-                    let _ = enigo.text(&ch.to_string());
-                    i += 1;
-                    thread::sleep(Duration::from_millis(10));
-                }
+                let _ = enigo.text(&ch.to_string());
+                thread::sleep(Duration::from_millis(50));
             }
         }
 

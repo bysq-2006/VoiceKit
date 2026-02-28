@@ -58,12 +58,10 @@ impl AudioBuffer {
         self.is_finished.load(Ordering::SeqCst)
     }
 
-    /// 获取当前缓冲区中的采样点数量
     pub fn len(&self) -> usize {
         self.data.lock().unwrap().len()
     }
 
-    /// 检查缓冲区是否为空
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
@@ -75,8 +73,10 @@ impl Default for AudioBuffer {
     }
 }
 
+/// 文本输入队列 - 每个字符是一个独立的队列元素
+/// 特殊字符：\x08 (ASCII退格) 表示退格，'\n' 表示回车
 pub struct TextBuffer {
-    segments: Mutex<VecDeque<String>>,
+    chars: Mutex<VecDeque<char>>,
     cond: Condvar,
     is_finished: AtomicBool,
 }
@@ -84,44 +84,45 @@ pub struct TextBuffer {
 impl TextBuffer {
     pub fn new() -> Self {
         Self {
-            segments: Mutex::new(VecDeque::new()),
+            chars: Mutex::new(VecDeque::new()),
             cond: Condvar::new(),
             is_finished: AtomicBool::new(false),
         }
     }
 
-    pub fn write(&self, text: String) {
-        let mut segments = self.segments.lock().unwrap();
-        segments.push_back(text);
+    /// 添加普通文本（每个字符作为一个独立元素）
+    pub fn push_text(&self, text: &str) {
+        let mut chars = self.chars.lock().unwrap();
+        for ch in text.chars() {
+            chars.push_back(ch);
+        }
         self.cond.notify_one();
     }
 
-    /// 批量发送退格键
-    /// 格式: \x01 + 4字节大端count
-    pub fn send_backspaces(&self, count: usize) {
+    /// 添加退格键（count 个独立的 '\b' 字符）
+    pub fn push_backspaces(&self, count: usize) {
         if count == 0 { return; }
-        let mut data = String::new();
-        data.push('\x01');
-        data.push(((count >> 24) & 0xFF) as u8 as char);
-        data.push(((count >> 16) & 0xFF) as u8 as char);
-        data.push(((count >> 8) & 0xFF) as u8 as char);
-        data.push((count & 0xFF) as u8 as char);
-        self.write(data);
+        let mut chars = self.chars.lock().unwrap();
+        for _ in 0..count {
+            chars.push_back('\x08');
+        }
+        self.cond.notify_one();
     }
 
-    pub fn read(&self) -> Option<String> {
-        let mut segments = self.segments.lock().unwrap();
+    /// 从队列取出一个字符（阻塞等待）
+    pub fn pop(&self) -> Option<char> {
+        let mut chars = self.chars.lock().unwrap();
         
         loop {
-            if let Some(text) = segments.pop_front() {
-                return Some(text);
+            if let Some(ch) = chars.pop_front() {
+                return Some(ch);
             }
             
             if self.is_finished.load(Ordering::SeqCst) {
                 return None;
             }
             
-            segments = self.cond.wait(segments).unwrap();
+            chars = self.cond.wait(chars).unwrap();
         }
     }
 
@@ -131,8 +132,8 @@ impl TextBuffer {
     }
 
     pub fn clear(&self) {
-        let mut segments = self.segments.lock().unwrap();
-        segments.clear();
+        let mut chars = self.chars.lock().unwrap();
+        chars.clear();
         self.is_finished.store(false, Ordering::SeqCst);
     }
 

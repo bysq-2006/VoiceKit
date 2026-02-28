@@ -19,7 +19,6 @@ pub struct DoubaoAsr {
     text_buffer: Arc<TextBuffer>,
     ws_sink: Arc<Mutex<Option<tokio::sync::mpsc::Sender<Message>>>>,
     is_connected: Arc<AtomicBool>,
-    /// 缓存上一次的识别结果，用于增量更新
     text_cache: Arc<Mutex<String>>,
 }
 
@@ -170,11 +169,13 @@ impl DoubaoAsr {
                                 
                                 if *new_text != *cache {
                                     let (backspace, addition) = compute_diff(&cache, new_text);
+                                    // 先发送退格键（每个都是独立的队列元素）
                                     if backspace > 0 {
-                                        text_buf.send_backspaces(backspace);
+                                        text_buf.push_backspaces(backspace);
                                     }
+                                    // 再发送新增文本（每个字符都是独立的队列元素）
                                     if !addition.is_empty() {
-                                        text_buf.write(addition);
+                                        text_buf.push_text(&addition);
                                     }
                                     *cache = new_text.clone();
                                 }
