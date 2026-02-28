@@ -1,5 +1,6 @@
 use crate::models::buffer::{AudioBuffer, TextBuffer};
 use crate::models::config::DoubaoConfig;
+use crate::utils::text_diff::compute_diff;
 use futures::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -18,8 +19,8 @@ pub struct DoubaoAsr {
     text_buffer: Arc<TextBuffer>,
     ws_sink: Arc<Mutex<Option<tokio::sync::mpsc::Sender<Message>>>>,
     is_connected: Arc<AtomicBool>,
-    /// 记录已输出的 definite 句子，避免重复
-    output_utterances: Arc<Mutex<std::collections::HashSet<String>>>,
+    /// 缓存上一次的识别结果，用于增量更新
+    text_cache: Arc<Mutex<String>>,
 }
 
 #[derive(Serialize)]
@@ -61,7 +62,7 @@ impl DoubaoAsr {
             text_buffer,
             ws_sink: Arc::new(Mutex::new(None)),
             is_connected: Arc::new(AtomicBool::new(false)),
-            output_utterances: Arc::new(Mutex::new(std::collections::HashSet::new())),
+            text_cache: Arc::new(Mutex::new(String::new())),
         })
     }
 
@@ -94,7 +95,8 @@ impl DoubaoAsr {
             }),
             request: serde_json::json!({
                 "model_name": "bigmodel", "reqid": reqid, "sequence": 1,
-                "show_utterances": true, "enable_punc": true
+                "show_utterances": true, "enable_punc": true,
+                "enable_vad": true, "end_window_size": 800
             }),
         };
         let bytes = serde_json::to_vec(&payload).unwrap();
@@ -148,7 +150,7 @@ impl DoubaoAsr {
     async fn start_listening(&self, stream: futures::stream::SplitStream<tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>>) {
         let text_buf = self.text_buffer.clone();
         let connected = self.is_connected.clone();
-        let output_set = self.output_utterances.clone();
+        let text_cache = self.text_cache.clone();
 
         tokio::spawn(async move {
             futures::pin_mut!(stream);
@@ -156,26 +158,30 @@ impl DoubaoAsr {
                 match msg_result {
                     Ok(Message::Binary(data)) => {
                         if let Some((seq, resp)) = Self::parse_response(&data) {
+                            log::info!("豆包原始响应: seq={}, code={}, error={:?}, result={:?}", seq, resp.code, resp.error, resp.result);
                             if resp.error.is_some() || (resp.code != 0 && resp.code != 1000) {
                                 if resp.code >= 2000 { connected.store(false, Ordering::SeqCst); }
                                 continue;
                             }
 
                             if let Some(result) = &resp.result {
-                                // 只输出 definite=true 的完整句子
-                                for utt in &result.utterances {
-                                    if utt.definite {
-                                        let mut set = output_set.lock().await;
-                                        // 避免重复输出同一句子
-                                        if set.insert(utt.text.clone()) {
-                                            text_buf.write(utt.text.clone());
-                                        }
+                                let mut cache = text_cache.lock().await;
+                                let new_text = &result.text;
+                                
+                                if *new_text != *cache {
+                                    let (backspace, addition) = compute_diff(&cache, new_text);
+                                    if backspace > 0 {
+                                        text_buf.send_backspaces(backspace);
                                     }
+                                    if !addition.is_empty() {
+                                        text_buf.write(addition);
+                                    }
+                                    *cache = new_text.clone();
                                 }
                                 
-                                // 会话结束，清空记录
+                                // 会话结束，清空缓存
                                 if seq < 0 {
-                                    output_set.lock().await.clear();
+                                    cache.clear();
                                 }
                             }
                         }
@@ -243,6 +249,6 @@ impl DoubaoAsr {
     pub async fn stop(&self) {
         self.is_connected.store(false, Ordering::SeqCst);
         *self.ws_sink.lock().await = None;
-        self.output_utterances.lock().await.clear();
+        self.text_cache.lock().await.clear();
     }
 }

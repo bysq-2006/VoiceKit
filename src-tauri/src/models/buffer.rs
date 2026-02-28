@@ -96,6 +96,19 @@ impl TextBuffer {
         self.cond.notify_one();
     }
 
+    /// 批量发送退格键
+    /// 格式: \x01 + 4字节大端count
+    pub fn send_backspaces(&self, count: usize) {
+        if count == 0 { return; }
+        let mut data = String::new();
+        data.push('\x01');
+        data.push(((count >> 24) & 0xFF) as u8 as char);
+        data.push(((count >> 16) & 0xFF) as u8 as char);
+        data.push(((count >> 8) & 0xFF) as u8 as char);
+        data.push((count & 0xFF) as u8 as char);
+        self.write(data);
+    }
+
     pub fn read(&self) -> Option<String> {
         let mut segments = self.segments.lock().unwrap();
         
