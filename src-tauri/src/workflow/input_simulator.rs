@@ -31,8 +31,9 @@ impl InputSimulator {
 
         match ch {
             '\x08' => {
-                // 退格键 - 不等待
+                // 退格键
                 let _ = enigo.key(enigo::Key::Backspace, Direction::Click);
+                thread::sleep(Duration::from_millis(20));
             }
             ch => {
                 // 普通字符
