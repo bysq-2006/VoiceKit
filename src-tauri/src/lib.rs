@@ -9,6 +9,7 @@ use models::buffer::{AudioBuffer, TextBuffer};
 use models::config::AppConfig;
 use models::state::AppState;
 use tauri::Manager;
+use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_global_shortcut::ShortcutState;
 use std::sync::{Arc, Mutex};
 
@@ -71,6 +72,20 @@ pub fn run() {
                 log::error!("初始化配置失败: {}", e);
             }
             
+            // 根据配置初始化开机自启动
+            let auto_start = {
+                let config = state.config.lock().unwrap();
+                config.auto_start
+            };
+            let autostart_manager = app.autolaunch();
+            if auto_start {
+                if let Err(e) = autostart_manager.enable() {
+                    log::error!("初始化开机自启动失败: {}", e);
+                }
+            } else {
+                let _ = autostart_manager.disable();
+            }
+            
             // 读取快捷键配置
             let shortcut_str = {
                 let config = state.config.lock().unwrap();
@@ -82,9 +97,15 @@ pub fn run() {
             
             // 注册快捷键，失败时使用默认快捷键
             if let Err(e) = utils::shortcut::init_shortcut(app, &shortcut_str) {
-                log::warn!("注册快捷键 '{}' 失败: {}, 使用默认快捷键 Shift+E", shortcut_str, e);
-                utils::shortcut::init_shortcut(app, "Shift+E")
-                    .map_err(|e| format!("注册默认快捷键失败: {}", e))?;
+                log::warn!("注册快捷键 '{}' 失败: {}, 尝试使用默认快捷键 Shift+E", shortcut_str, e);
+                // 如果配置快捷键和默认快捷键不同，尝试默认快捷键
+                if shortcut_str != "Shift+E" {
+                    if let Err(e) = utils::shortcut::init_shortcut(app, "Shift+E") {
+                        log::error!("注册默认快捷键也失败: {}，应用将继续运行但快捷键不可用", e);
+                    }
+                } else {
+                    log::error!("配置的快捷键和默认快捷键相同，无法注册，应用将继续运行但快捷键不可用");
+                }
             }
             tray::setup_tray(app)?;
 

@@ -1,4 +1,5 @@
 use tauri::{AppHandle, Manager, WebviewWindow};
+use tauri_plugin_autostart::ManagerExt;
 use crate::models::{state::AppState, config::{AppConfig, AsrConfig, XunfeiConfig, DoubaoConfig}};
 
 const LABEL: &str = "settings";
@@ -81,12 +82,24 @@ pub fn sync_config(
     state: tauri::State<AppState>,
     new_config: AppConfig,
 ) -> Result<(), String> {
-    let old = state.config.lock().unwrap().shortcut.clone();
+    let old = state.config.lock().unwrap().clone();
     state.update_config(&app, new_config.clone())?;
     
-    if old != new_config.shortcut {
+    // 处理快捷键变化
+    if old.shortcut != new_config.shortcut {
         let _ = crate::utils::shortcut::update_shortcut(&app, &new_config.shortcut);
     }
+    
+    // 处理开机自启动变化
+    if old.auto_start != new_config.auto_start {
+        let autostart_manager = app.autolaunch();
+        if new_config.auto_start {
+            autostart_manager.enable().map_err(|e| format!("启用开机自启动失败: {}", e))?;
+        } else {
+            autostart_manager.disable().map_err(|e| format!("禁用开机自启动失败: {}", e))?;
+        }
+    }
+    
     Ok(())
 }
 
