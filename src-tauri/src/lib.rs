@@ -13,6 +13,8 @@ use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_global_shortcut::ShortcutState;
 use std::sync::{Arc, Mutex};
 
+const DEFAULT_SHORTCUT: &str = "Shift+E";
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     env_logger::init();
@@ -45,80 +47,54 @@ pub fn run() {
             commands::settings::test_asr_config,
         ])
         .setup(|app| {
-            // 创建共享的资源
             let config = Arc::new(Mutex::new(AppConfig::default()));
             let audio_buffer = Arc::new(AudioBuffer::new());
             let text_buffer = Arc::new(TextBuffer::new());
             
-            // 初始化 ASR 管理器（被动模式，无监控线程）
             let asr_manager = asr::init_asr_manager(
                 audio_buffer.clone(),
                 text_buffer.clone(),
                 config.clone(),
             );
             
-            // 创建并管理 AppState
-            let state = AppState::new(
-                asr_manager,
-                audio_buffer,
-                text_buffer,
-                config,
-            );
+            let state = AppState::new(asr_manager, audio_buffer, text_buffer, config);
             app.manage(state);
             
-            // 初始化配置
-            let state = app.state::<AppState>();
+            let state: tauri::State<AppState> = app.state();
             if let Err(e) = state.init_config(&app.handle()) {
                 log::error!("初始化配置失败: {}", e);
             }
             
-            // 根据配置初始化开机自启动
-            let auto_start = {
-                let config = state.config.lock().unwrap();
-                config.auto_start
-            };
-            let autostart_manager = app.autolaunch();
-            if auto_start {
-                if let Err(e) = autostart_manager.enable() {
-                    log::error!("初始化开机自启动失败: {}", e);
-                }
-            } else {
-                let _ = autostart_manager.disable();
+            // 初始化自启动
+            let auto_start = state.config.lock().unwrap().auto_start;
+            let manager = app.autolaunch();
+            if let Err(e) = if auto_start { manager.enable() } else { manager.disable() } {
+                log::error!("初始化自启动失败: {}", e);
             }
             
-            // 读取快捷键配置
-            let shortcut_str = {
-                let config = state.config.lock().unwrap();
-                config.shortcut.clone()
-            };
+            // 注册快捷键（失败尝试默认）
+            let shortcut = state.config.lock().unwrap().shortcut.clone();
+            for (i, sc) in [shortcut.as_str(), DEFAULT_SHORTCUT].iter().enumerate() {
+                if utils::shortcut::init_shortcut(app, sc).is_ok() { break; }
+                if i == 1 { log::error!("快捷键注册失败，应用继续运行"); }
+            }
             
-            // 克隆 AppState 用于其他模块
+            // 克隆 state 用于后续使用
             let state_clone = Arc::new(state.inner().clone());
-            
-            // 注册快捷键，失败时使用默认快捷键
-            if let Err(e) = utils::shortcut::init_shortcut(app, &shortcut_str) {
-                log::warn!("注册快捷键 '{}' 失败: {}, 尝试使用默认快捷键 Shift+E", shortcut_str, e);
-                // 如果配置快捷键和默认快捷键不同，尝试默认快捷键
-                if shortcut_str != "Shift+E" {
-                    if let Err(e) = utils::shortcut::init_shortcut(app, "Shift+E") {
-                        log::error!("注册默认快捷键也失败: {}，应用将继续运行但快捷键不可用", e);
-                    }
-                } else {
-                    log::error!("配置的快捷键和默认快捷键相同，无法注册，应用将继续运行但快捷键不可用");
-                }
-            }
-            tray::setup_tray(app)?;
-
             let app_handle = app.handle().clone();
-            if let Some(main_window) = app.get_webview_window("main") {
-                main_window.on_window_event(move |event| {
+            
+            tray::setup_tray(app)?;
+            
+            // 窗口失焦处理
+            if let Some(main) = app.get_webview_window("main") {
+                main.on_window_event(move |event| {
                     if let tauri::WindowEvent::Focused(false) = event {
                         let handle = app_handle.clone();
                         tauri::async_runtime::spawn(async move {
                             tokio::time::sleep(std::time::Duration::from_millis(200)).await;
                             if handle.get_webview_window("settings").is_none() {
-                                if let Some(main) = handle.get_webview_window("main") {
-                                    if let Ok(false) = main.is_focused() {
+                                if let Some(w) = handle.get_webview_window("main") {
+                                    if let Ok(false) = w.is_focused() {
                                         commands::recording::hide_and_stop_recording(handle);
                                     }
                                 }
@@ -127,19 +103,11 @@ pub fn run() {
                     }
                 });
             }
-
-            // 启动录音监控线程
+            
             workflow::recorder::init_recorder(state_clone.clone());
-            
-            // 启动输入模拟器（从 TextBuffer 读取）
             workflow::input_simulator::init_input_simulator(state_clone.clone());
-            
-            // 启动 ASR 控制器（根据录音状态控制 ASR 启停）
             workflow::asr_controller::init_asr_controller(state_clone.clone());
-            
-            // 启动全局输入监听（录音状态下任意输入取消录音）
-            let app_handle = app.handle().clone();
-            workflow::global_input::init(state_clone.clone(), app_handle);
+            workflow::global_input::init(state_clone, app.handle().clone());
 
             Ok(())
         })
