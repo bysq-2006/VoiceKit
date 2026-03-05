@@ -2,27 +2,7 @@
 import { computed } from 'vue';
 import DoubaoConfig from './DoubaoConfig.vue';
 import XunfeiConfig from './XunfeiConfig.vue';
-
-export type ASRProviderType = 'doubao' | 'xunfei';
-
-// 豆包配置
-export interface DoubaoConfigData {
-  api_key?: string;
-}
-
-// 讯飞配置
-export interface XunfeiConfigData {
-  app_id?: string;
-  api_key?: string;
-  api_secret?: string;
-}
-
-// ASR 总配置（与后端结构一致）
-export interface ASRConfig {
-  provider: ASRProviderType;
-  doubao: DoubaoConfigData;
-  xunfei: XunfeiConfigData;
-}
+import type { ASRConfig } from '../../../composables/useConfig';
 
 const props = defineProps<{
   modelValue: ASRConfig;
@@ -34,14 +14,13 @@ const emit = defineEmits<{
 }>();
 
 const providers = [
-  { key: 'doubao' as ASRProviderType, name: '豆包 (Volcengine)' },
-  { key: 'xunfei' as ASRProviderType, name: '讯飞 (iFlytek)' },
+  { key: 'doubao' as const, name: '豆包 (Volcengine)' },
+  { key: 'xunfei' as const, name: '讯飞 (iFlytek)' },
 ];
 
 const currentProvider = computed({
   get: () => props.modelValue.provider,
-  set: (val: ASRProviderType) => {
-    // 只切换 provider，保留所有服务商的配置
+  set: (val) => {
     emit('update:modelValue', { ...props.modelValue, provider: val });
     emit('save');
   }
@@ -50,20 +29,14 @@ const currentProvider = computed({
 const doubaoConfig = computed({
   get: () => props.modelValue.doubao,
   set: (val) => {
-    emit('update:modelValue', {
-      ...props.modelValue,
-      doubao: val,
-    });
+    emit('update:modelValue', { ...props.modelValue, doubao: val });
   }
 });
 
 const xunfeiConfig = computed({
   get: () => props.modelValue.xunfei,
   set: (val) => {
-    emit('update:modelValue', {
-      ...props.modelValue,
-      xunfei: val,
-    });
+    emit('update:modelValue', { ...props.modelValue, xunfei: val });
   }
 });
 </script>
@@ -100,7 +73,7 @@ const xunfeiConfig = computed({
 .asr-settings {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
 }
 
 .item {
@@ -115,12 +88,14 @@ const xunfeiConfig = computed({
 }
 
 select {
-  padding: 8px 12px;
+  padding: 6px 12px;
+  background: white;
   border: 1px solid #dadce0;
   border-radius: 4px;
-  font-size: 13px;
-  background: white;
-  width: 180px;
+  font-size: 12px;
+  color: #202124;
+  cursor: pointer;
+  min-width: 140px;
 }
 
 select:focus {
@@ -129,8 +104,6 @@ select:focus {
 }
 
 .config-area {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+  margin-top: 8px;
 }
 </style>

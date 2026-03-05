@@ -1,62 +1,22 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
-import AsrSettings, { type ASRConfig } from './asr/AsrSettings.vue';
+import { useConfig } from '../../composables/useConfig';
+import AsrSettings from './asr/AsrSettings.vue';
+import { THEMES } from '../../themes/index';
 
-// 类型定义
-interface AppConfig {
-  shortcut: string;
-  auto_start: boolean;
-  asr: ASRConfig;
-}
-
-// 响应式数据
-const config = ref<AppConfig>({
-  shortcut: 'Shift+E',
-  auto_start: false,
-  asr: {
-    provider: 'doubao',
-    doubao: { api_key: '' },
-    xunfei: { app_id: '', api_key: '', api_secret: '' },
-  }
-});
+const { config, update, save } = useConfig();
+const themes = THEMES;
 
 const isRecording = ref(false);
 const msg = ref('');
 let timeout: number;
 
-// 计算属性
-const displayShortcut = computed(() => 
+const displayShortcut = computed(() =>
   isRecording.value ? '按下快捷键...' : config.value.shortcut.replace(/\+/g, ' + ')
 );
 
-const asrConfig = computed({
-  get: () => config.value.asr,
-  set: (val) => { config.value.asr = val; }
-});
-
-// 生命周期
-onMounted(async () => {
-  try {
-    const loaded = await invoke<AppConfig>('get_config');
-    config.value = { ...config.value, ...loaded, asr: { ...config.value.asr, ...loaded.asr } };
-  } catch (e) {
-    console.error(e);
-  }
-});
-
-// 窗口控制
 const closeWindow = () => invoke('close_settings_window');
-
-// 配置持久化
-const save = async () => {
-  try {
-    await invoke('sync_config', { newConfig: config.value });
-    showMsg('已保存');
-  } catch (e) {
-    showMsg('保存失败');
-  }
-};
 
 const showMsg = (text: string, time = 1500) => {
   msg.value = text;
@@ -64,8 +24,7 @@ const showMsg = (text: string, time = 1500) => {
   timeout = setTimeout(() => msg.value = '', time);
 };
 
-// 快捷键录制
-const onKey = (e: KeyboardEvent) => {
+const onKey = async (e: KeyboardEvent) => {
   if (!isRecording.value) return;
   e.preventDefault();
   if (['Control', 'Shift', 'Alt', 'Meta'].includes(e.key)) return;
@@ -80,9 +39,13 @@ const onKey = (e: KeyboardEvent) => {
   
   if (!mods.length) return showMsg('需要修饰键');
   
-  config.value.shortcut = [...mods, key].join('+');
   isRecording.value = false;
-  save();
+  try {
+    await update('shortcut', [...mods, key].join('+'));
+    showMsg('已保存');
+  } catch {
+    showMsg('保存失败');
+  }
 };
 </script>
 
@@ -120,8 +83,21 @@ const onKey = (e: KeyboardEvent) => {
       </label>
     </div>
 
+    <!-- 主题选择 -->
+    <div class="item">
+      <div>
+        <div class="label">界面主题</div>
+        <div class="desc">选择主窗口的视觉风格</div>
+      </div>
+      <select v-model="config.theme" @change="save" class="theme-select">
+        <option v-for="theme in themes" :key="theme.name" :value="theme.name">
+          {{ theme.displayName }}
+        </option>
+      </select>
+    </div>
+
     <!-- ASR 设置 -->
-    <AsrSettings v-model="asrConfig" @save="save" />
+    <AsrSettings v-model="config.asr" @save="save" />
 
     <!-- 提示 -->
     <div v-if="msg" class="toast">{{ msg }}</div>
@@ -150,6 +126,7 @@ const onKey = (e: KeyboardEvent) => {
   gap: 16px;
   overflow-y: auto;
   padding: 0 20px 20px;
+  outline: none; /* 移除焦点黑线框 */
 }
 
 .settings-content::-webkit-scrollbar {
@@ -283,6 +260,23 @@ const onKey = (e: KeyboardEvent) => {
 
 .switch input:checked + span::before {
   transform: translateX(16px);
+}
+
+/* 主题选择下拉框 */
+.theme-select {
+  padding: 6px 12px;
+  background: white;
+  border: 1px solid #dadce0;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #202124;
+  cursor: pointer;
+  min-width: 120px;
+}
+
+.theme-select:focus {
+  outline: none;
+  border-color: #0d9488;
 }
 
 /* 提示消息 */

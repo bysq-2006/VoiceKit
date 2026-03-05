@@ -1,4 +1,4 @@
-import { createApp } from 'vue';
-import Settings from './pages/settings/Settings.vue';
+import { createApp } from 'vue'
+import Settings from './pages/settings/Settings.vue'
 
-createApp(Settings).mount('#app');
+createApp(Settings).mount('#app')

@@ -1,4 +1,4 @@
-use tauri::{AppHandle, Manager, WebviewWindow};
+use tauri::{AppHandle, Manager, WebviewWindow, Emitter};
 use tauri_plugin_autostart::ManagerExt;
 use crate::models::{state::AppState, config::{AppConfig, AsrConfig, XunfeiConfig, DoubaoConfig}};
 
@@ -81,6 +81,9 @@ pub fn sync_config(
             autostart_manager.disable().map_err(|e| format!("禁用开机自启动失败: {}", e))?;
         }
     }
+    
+    // 广播配置更新事件给所有窗口，通知所有 useConfig 实例同步
+    let _ = app.emit("config-updated", new_config);
     
     Ok(())
 }

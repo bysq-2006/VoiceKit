@@ -73,13 +73,25 @@ fn default_shortcut() -> String {
     "Shift+E".to_string()
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum Theme {
     #[default]
-    System,
-    Dark,
-    Light,
+    Default,
+    Apple,
+    Microsoft,
+    Google,
+}
+
+impl Theme {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Theme::Default => "default",
+            Theme::Apple => "apple",
+            Theme::Microsoft => "microsoft",
+            Theme::Google => "google",
+        }
+    }
 }
 
 impl AppConfig {
