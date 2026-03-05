@@ -87,7 +87,7 @@ const onKey = (e: KeyboardEvent) => {
 </script>
 
 <template>
-  <div class="settings" tabindex="0" @keydown="onKey">
+  <div class="settings-wrapper">
     <!-- 标题栏 -->
     <div class="title-bar" data-tauri-drag-region>
       <div class="drag-handle"></div>
@@ -98,6 +98,8 @@ const onKey = (e: KeyboardEvent) => {
       </button>
     </div>
 
+    <!-- 内容区域 -->
+    <div class="settings-content" tabindex="0" @keydown="onKey">
     <!-- 快捷键 -->
     <div class="item">
       <div>
@@ -124,11 +126,12 @@ const onKey = (e: KeyboardEvent) => {
     <!-- 提示 -->
     <div v-if="msg" class="toast">{{ msg }}</div>
   </div>
+  </div>
 </template>
 
 <style scoped>
 /* 布局 */
-.settings {
+.settings-wrapper {
   width: 100%;
   height: 100%;
   background: #efefef;
@@ -137,12 +140,19 @@ const onKey = (e: KeyboardEvent) => {
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+}
+
+.settings-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
   gap: 16px;
   overflow-y: auto;
   padding: 0 20px 20px;
 }
 
-.settings::-webkit-scrollbar {
+.settings-content::-webkit-scrollbar {
   display: none;
 }
 
@@ -152,7 +162,7 @@ const onKey = (e: KeyboardEvent) => {
   align-items: center;
   justify-content: center;
   height: 28px;
-  margin: 0 -20px;
+  padding: 0 8px;
   flex-shrink: 0;
   -webkit-app-region: drag;
   app-region: drag;
