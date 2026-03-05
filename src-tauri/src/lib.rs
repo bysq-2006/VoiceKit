@@ -81,29 +81,8 @@ pub fn run() {
             
             // 克隆 state 用于后续使用
             let state_clone = Arc::new(state.inner().clone());
-            let app_handle = app.handle().clone();
-            
+
             tray::setup_tray(app)?;
-            
-            // 窗口失焦处理
-            if let Some(main) = app.get_webview_window("main") {
-                main.on_window_event(move |event| {
-                    if let tauri::WindowEvent::Focused(false) = event {
-                        let handle = app_handle.clone();
-                        tauri::async_runtime::spawn(async move {
-                            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
-                            if handle.get_webview_window("settings").is_none() {
-                                if let Some(w) = handle.get_webview_window("main") {
-                                    if let Ok(false) = w.is_focused() {
-                                        commands::recording::hide_and_stop_recording(handle);
-                                    }
-                                }
-                            }
-                        });
-                    }
-                });
-            }
-            
             workflow::recorder::init_recorder(state_clone.clone());
             workflow::input_simulator::init_input_simulator(state_clone.clone());
             workflow::asr_controller::init_asr_controller(state_clone.clone());

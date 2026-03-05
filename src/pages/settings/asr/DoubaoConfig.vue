@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
-import PasswordInput from '../../PasswordInput.vue';
+import PasswordInput from '../../../components/PasswordInput.vue';
 
 interface DoubaoConfigData {
   app_id?: string;

@@ -3,6 +3,10 @@ import { ref, computed, onMounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import AsrSettings, { type ASRConfig } from './settings/asr/AsrSettings.vue';
 
+const closeWindow = () => {
+  invoke('close_settings_window');
+};
+
 interface AppConfig {
   shortcut: string;
   auto_start: boolean;
@@ -93,7 +97,18 @@ const asrConfig = computed({
 </script>
 
 <template>
-  <div class="settings" tabindex="0" @keydown="onKey">
+  <div class="settings-wrapper">
+    <!-- 标题栏 -->
+    <div class="title-bar" data-tauri-drag-region>
+      <div class="drag-handle"></div>
+      <button class="close-btn" @click="closeWindow">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+          <path d="M18 6L6 18M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+
+    <div class="settings" tabindex="0" @keydown="onKey">
     <!-- 快捷键 -->
     <div class="item">
       <div>
@@ -122,17 +137,24 @@ const asrConfig = computed({
     <!-- 提示 -->
     <div v-if="msg" class="toast">{{ msg }}</div>
   </div>
+  </div>
 </template>
 
 <style scoped>
-.settings {
+.settings-wrapper {
   width: 100%;
   height: 100%;
   background: #efefef;
   border-radius: 8px;
-  padding: 20px;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+}
+
+.settings {
+  flex: 1;
+  padding: 0 20px 20px 20px;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -217,6 +239,57 @@ const asrConfig = computed({
 
 .switch input:checked + span::before {
   transform: translateX(16px);
+}
+
+.title-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 4px;
+  height: 28px;
+  padding: 0 12px;
+  cursor: default;
+  -webkit-app-region: drag;
+  app-region: drag;
+  position: relative;
+}
+
+.drag-handle {
+  width: 32px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(0, 0, 0, 0.15);
+  margin: 0 auto;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+.close-btn {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: #5f6368;
+  cursor: pointer;
+  transition: all 0.2s;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+  position: absolute;
+  right: 8px;
+}
+
+.close-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: #333;
+}
+
+.close-btn svg {
+  width: 12px;
+  height: 12px;
 }
 
 .toast {

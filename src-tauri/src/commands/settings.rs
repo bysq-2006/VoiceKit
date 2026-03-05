@@ -43,15 +43,6 @@ pub async fn open_settings(app: AppHandle) -> Result<(), String> {
         .build()
         .map_err(|e| e.to_string())?;
 
-    let app_handle = app.clone();
-    w.on_window_event(move |event| {
-        if let tauri::WindowEvent::Focused(false) = event {
-            if let Some(w) = app_handle.get_webview_window(LABEL) {
-                let _ = w.close();
-            }
-        }
-    });
-
     Ok(())
 }
 
