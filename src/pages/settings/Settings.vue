@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
-import AsrSettings, { type ASRConfig } from './settings/asr/AsrSettings.vue';
+import AsrSettings, { type ASRConfig } from './asr/AsrSettings.vue';
 
 // 类型定义
 interface AppConfig {
@@ -167,6 +167,7 @@ const onKey = (e: KeyboardEvent) => {
   -webkit-app-region: drag;
   app-region: drag;
   position: relative;
+  /* 调试日志：确保整个标题栏都是可拖拽的 */
 }
 
 .drag-handle {
@@ -174,8 +175,7 @@ const onKey = (e: KeyboardEvent) => {
   height: 4px;
   border-radius: 2px;
   background: rgba(0, 0, 0, 0.15);
-  -webkit-app-region: no-drag;
-  app-region: no-drag;
+  pointer-events: none; /* 修复：让小条不拦截鼠标事件，使拖拽可以穿透 */
 }
 
 .close-btn {
