@@ -12,46 +12,37 @@ pub async fn open_settings(app: AppHandle) -> Result<(), String> {
         return Ok(());
     }
 
-    let main = app.get_webview_window("main").ok_or("主窗口不存在")?;
-    
-    let pos = main.outer_position().map_err(|e| e.to_string())?;
-    let size = main.outer_size().map_err(|e| e.to_string())?;
-    
-    let settings_w = 320.0;
-    let settings_h = 400.0;  // 固定高度，足够显示所有内容
-    let gap = 8.0;
-    
-    let x = pos.x as f64;
-    let y = pos.y as f64 + size.height as f64 + gap;
+    const W: f64 = 320.0;
+    const H: f64 = 400.0;
+    const BOTTOM_GAP: f64 = 60.0; // 距离底部留出托盘区域
+    const RIGHT_GAP: f64 = 12.0;  // 距离右边距
 
-    // 在屏幕外创建窗口
+    // 获取屏幕尺寸，默认居中
+    let (x, y) = app.primary_monitor()
+        .map(|m| m.map(|m| {
+            let screen_w = m.size().width as f64 / m.scale_factor();
+            let screen_h = m.size().height as f64 / m.scale_factor();
+            let x = screen_w - W - RIGHT_GAP;
+            let y = screen_h - H - BOTTOM_GAP;
+            (x, y)
+        }))
+        .ok()
+        .flatten()
+        .unwrap_or((0.0, 0.0));
+
     let w = WebviewWindow::builder(&app, LABEL, tauri::WebviewUrl::App(URL.into()))
         .title("设置")
-        .inner_size(settings_w, settings_h)
-        .position(-10000.0, -10000.0)
+        .inner_size(W, H)
+        .position(x, y)
         .resizable(false)
         .always_on_top(true)
         .skip_taskbar(true)
         .decorations(false)
         .transparent(true)
-        .visible(false)
+        .visible(true)
         .build()
         .map_err(|e| e.to_string())?;
 
-    tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
-    
-    // 移动到正确位置
-    let _ = w.set_position(tauri::Position::Physical(tauri::PhysicalPosition { 
-        x: x as i32, 
-        y: y as i32 
-    }));
-    
-    tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
-    
-    // 最后显示
-    let _ = w.show();
-    let _ = w.set_focus();
-    
     let app_handle = app.clone();
     w.on_window_event(move |event| {
         if let tauri::WindowEvent::Focused(false) = event {
@@ -60,7 +51,7 @@ pub async fn open_settings(app: AppHandle) -> Result<(), String> {
             }
         }
     });
-    
+
     Ok(())
 }
 

@@ -6,6 +6,7 @@ use crate::commands::window;
 pub fn setup_tray(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     // 创建菜单项
     let show_item = MenuItem::with_id(app, "show", "显示窗口", true, None::<&str>)?;
+    let settings_item = MenuItem::with_id(app, "settings", "设置", true, None::<&str>)?;
     let quit_item = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
 
     // 创建菜单
@@ -13,6 +14,7 @@ pub fn setup_tray(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>
         app,
         &[
             &show_item,
+            &settings_item,
             &PredefinedMenuItem::separator(app)?,
             &quit_item,
         ]
@@ -30,6 +32,14 @@ pub fn setup_tray(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>
         match event.id.as_ref() {
             "show" => {
                 window::show_window(app.clone());
+            }
+            "settings" => {
+                let app_handle = app.clone();
+                tauri::async_runtime::spawn(async move {
+                    if let Err(e) = crate::commands::settings::open_settings(app_handle).await {
+                        eprintln!("打开设置窗口失败: {}", e);
+                    }
+                });
             }
             "quit" => {
                 app.exit(0);
