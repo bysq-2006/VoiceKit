@@ -27,15 +27,21 @@ pub fn run() {
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, _shortcut, event| {
                     if event.state == ShortcutState::Pressed {
-                        commands::window::show_window(app.clone());
+                        // 根据当前主题设置窗口尺寸
                         let state = app.state::<AppState>();
-                        crate::utils::recording::toggle(&state, &app);
+                        let (width, height) = match state.config.lock().unwrap().theme {
+                            models::config::Theme::Default => (Some(240), Some(150)),
+                            models::config::Theme::Google => (Some(400), Some(100)),
+                        };
+                        commands::window::show_window(app.clone(), width, height);
+                        crate::utils::recording_state::toggle(&state, &app);
                     }
                 })
                 .build(),
         )
         .invoke_handler(tauri::generate_handler![
             commands::window::show_window,
+            commands::window::hide_window,
             commands::recording::hide_and_stop_recording,
             commands::window::quit_app,
             commands::recording::get_recording_state,

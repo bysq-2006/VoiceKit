@@ -1,0 +1,159 @@
+<script setup lang="ts">
+import { ref, onMounted, onUnmounted } from 'vue';
+import { invoke } from '@tauri-apps/api/core';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+
+const isRecording = ref(false);
+let unlistenState: UnlistenFn;
+
+onMounted(async () => {
+  isRecording.value = await invoke('get_recording_state');
+  unlistenState = await listen<boolean>('recording-state-changed', (e) => {
+    isRecording.value = e.payload;
+  });
+});
+
+onUnmounted(() => unlistenState?.());
+
+const toggleRecording = () => invoke('set_recording', { recording: !isRecording.value });
+</script>
+
+<template>
+  <div class="panel" :class="{ recording: isRecording }" data-tauri-drag-region>
+    <div class="content">
+      <div class="text">
+        <span class="status">{{ isRecording ? 'Listening...' : 'Ready' }}</span>
+        <div class="wave">
+          <div v-for="i in 4" :key="i" class="bar" :class="{ active: isRecording }" :style="{ animationDelay: `${i * 0.1}s` }" />
+        </div>
+      </div>
+
+      <button class="mic-btn" :class="{ active: isRecording }" @click="toggleRecording">
+        <svg viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+          <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.panel {
+  width: 100%;
+  height: 100%;
+  background: #f5f5f5;
+  border-radius: 32px;
+  box-shadow: 
+    0 2px 8px rgba(0, 0, 0, 0.08),
+    0 4px 20px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+}
+
+:global(body) {
+  overflow: hidden;
+}
+
+.content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 100%;
+  padding: 0 12px 0 24px;
+  -webkit-app-region: drag;
+}
+
+.text {
+  transform: translateY(-4px);
+  display: flex;
+  flex-direction: column;
+}
+
+.status {
+  font-size: 18px;
+  font-weight: 500;
+  color: #1a1a2e;
+}
+
+.wave {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 16px;
+}
+
+.bar {
+  width: 4px;
+  height: 4px;
+  background: #9e9e9e;
+  border-radius: 2px;
+  transition: height 0.2s;
+}
+
+.bar.active {
+  background: #4CAF50;
+  animation: wave 0.8s ease-in-out infinite;
+}
+
+@keyframes wave {
+  0%, 100% { height: 4px; }
+  50% { height: 14px; }
+}
+
+.mic-btn {
+  width:  50px;
+  height: 50px;
+  -webkit-app-region: no-drag;
+  border: none;
+  border-radius: 50%;
+  background: #4CAF50;
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s;
+  box-shadow: 
+    0 0 0 4px rgba(76, 175, 80, 0.15),
+    0 4px 12px rgba(76, 175, 80, 0.3);
+}
+
+.mic-btn:hover {
+  transform: scale(1.05);
+  box-shadow: 
+    0 0 0 6px rgba(76, 175, 80, 0.2),
+    0 6px 16px rgba(76, 175, 80, 0.4);
+}
+
+.mic-btn.active {
+  background: #f44336;
+  box-shadow: 
+    0 0 0 4px rgba(244, 67, 54, 0.15),
+    0 4px 12px rgba(244, 67, 54, 0.3);
+  animation: glow 1.5s ease-in-out infinite;
+}
+
+.mic-btn.active:hover {
+  box-shadow: 
+    0 0 0 6px rgba(244, 67, 54, 0.2),
+    0 6px 16px rgba(244, 67, 54, 0.4);
+}
+
+.mic-btn svg {
+  width: 28px;
+  height: 28px;
+}
+
+@keyframes glow {
+  0%, 100% { 
+    box-shadow: 
+      0 0 0 4px rgba(244, 67, 54, 0.15),
+      0 0 20px rgba(244, 67, 54, 0.4);
+  }
+  50% { 
+    box-shadow: 
+      0 0 0 6px rgba(244, 67, 54, 0.25),
+      0 0 30px rgba(244, 67, 54, 0.6);
+  }
+}
+</style>

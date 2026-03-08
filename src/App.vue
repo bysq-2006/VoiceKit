@@ -10,7 +10,7 @@ const ThemeComponent = computed(() => getThemeComponent(config.value.theme));
 <template>
   <div class="app-container">
     <Suspense>
-      <component :is="ThemeComponent" />
+      <component :is="ThemeComponent" :key="config.theme" />
       <template #fallback>
         <div class="loading">加载中...</div>
       </template>

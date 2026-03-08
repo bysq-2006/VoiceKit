@@ -34,11 +34,11 @@ pub fn init(app_state: Arc<AppState>, app_handle: tauri::AppHandle) {
             match event.event_type {
                 EventType::KeyPress(key) if !is_modifier_only(&key) => {
                     log::info!("录音状态下检测到按键，取消录音");
-                    crate::utils::recording::set(&app_state, &app_handle, false);
+                    crate::utils::recording_state::set(&app_state, &app_handle, false);
                 }
                 EventType::ButtonPress(_) => {
                     log::info!("录音状态下检测到鼠标点击，取消录音");
-                    crate::utils::recording::set(&app_state, &app_handle, false);
+                    crate::utils::recording_state::set(&app_state, &app_handle, false);
                 }
                 _ => {}
             }

@@ -78,8 +78,6 @@ fn default_shortcut() -> String {
 pub enum Theme {
     #[default]
     Default,
-    Apple,
-    Microsoft,
     Google,
 }
 
@@ -87,8 +85,6 @@ impl Theme {
     pub fn as_str(&self) -> &'static str {
         match self {
             Theme::Default => "default",
-            Theme::Apple => "apple",
-            Theme::Microsoft => "microsoft",
             Theme::Google => "google",
         }
     }

@@ -13,8 +13,9 @@
     "windows": [
       {
         "title": "VoiceKit",
-        "width": 160,
-        "height": 100,
+        "width": 240,
+        "height": 150,
+        "visible": false,
         "decorations": false,
         "resizable": false,
         "maximizable": false,

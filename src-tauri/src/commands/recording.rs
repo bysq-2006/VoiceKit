@@ -8,7 +8,7 @@ pub fn set_recording(
     state: State<AppState>,
     recording: bool,
 ) -> Result<(), String> {
-    crate::utils::recording::set(&state, &app, recording);
+    crate::utils::recording_state::set(&state, &app, recording);
     Ok(())
 }
 

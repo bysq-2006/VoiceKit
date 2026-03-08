@@ -4,12 +4,12 @@ use crate::models::buffer::{AudioBuffer, TextBuffer};
 use crate::asr::manager::AsrManager;
 
 pub struct AppState {
-    pub is_recording: Arc<Mutex<bool>>,
-    pub config: Arc<Mutex<AppConfig>>,
-    pub audio_buffer: Arc<AudioBuffer>,
-    pub text_buffer: Arc<TextBuffer>,
-    pub asr_manager: Arc<AsrManager>,
-    pub is_simulating_input: AtomicBool,
+    pub is_recording: Arc<Mutex<bool>>,      // 录音状态：是否正在录音
+    pub config: Arc<Mutex<AppConfig>>,       // 应用配置：快捷键、ASR设置等
+    pub audio_buffer: Arc<AudioBuffer>,      // 音频缓冲区：录音数据暂存
+    pub text_buffer: Arc<TextBuffer>,        // 文本缓冲区：识别结果暂存
+    pub asr_manager: Arc<AsrManager>,        // ASR管理器：语音识别服务协调
+    pub is_simulating_input: AtomicBool,     // 输入模拟标志：是否正在模拟键盘输入
 }
 
 impl Clone for AppState {

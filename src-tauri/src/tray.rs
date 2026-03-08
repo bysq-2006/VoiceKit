@@ -31,7 +31,7 @@ pub fn setup_tray(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>
     tray.on_menu_event(|app: &tauri::AppHandle, event| {
         match event.id.as_ref() {
             "show" => {
-                window::show_window(app.clone());
+                window::show_window(app.clone(), None, None);
             }
             "settings" => {
                 let app_handle = app.clone();
@@ -53,7 +53,7 @@ pub fn setup_tray(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>
         match event {
             // 左键点击：显示窗口
             TrayIconEvent::Click { button: MouseButton::Left, .. } => {
-                window::show_window(tray.app_handle().clone());
+                window::show_window(tray.app_handle().clone(), None, None);
             }
             // 右键点击：弹出菜单（由 Tauri 自动处理）
             _ => {}
