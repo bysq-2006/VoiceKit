@@ -4,27 +4,40 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 
 const isRecording = ref(false);
-const isMaskActive = ref(false);
 let unlistenState: UnlistenFn;
-
-const toggleMask = () => {
-  isMaskActive.value = !isMaskActive.value;
-};
+let hideTimeout: number | null = null;
 
 onMounted(async () => {
   isRecording.value = await invoke('get_recording_state');
   unlistenState = await listen<boolean>('recording-state-changed', (e) => {
+    const wasRecording = isRecording.value;
     isRecording.value = e.payload;
+    
+    // 如果停止录音，延迟 1.5 秒后隐藏窗口（等待遮罩动画完成）
+    if (wasRecording && !isRecording.value) {
+      hideTimeout = window.setTimeout(() => {
+        invoke('hide_window');
+      }, 600);
+    } else if (isRecording.value && hideTimeout) {
+      // 如果重新开始录音，取消隐藏
+      clearTimeout(hideTimeout);
+      hideTimeout = null;
+    }
   });
 });
 
-onUnmounted(() => unlistenState?.());
+onUnmounted(() => {
+  unlistenState?.();
+  if (hideTimeout) {
+    clearTimeout(hideTimeout);
+  }
+});
 
 const toggleRecording = () => invoke('set_recording', { recording: !isRecording.value });
 </script>
 
 <template>
-  <div class="panel" :class="{ recording: isRecording, active: isMaskActive }" data-tauri-drag-region @click="toggleMask">
+  <div class="panel" :class="{ recording: isRecording, active: isRecording }" data-tauri-drag-region>
     <div class="content">
       <div class="text">
         <span class="status">{{ isRecording ? 'Listening...' : 'Ready' }}</span>
