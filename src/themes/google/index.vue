@@ -106,37 +106,38 @@ const toggleRecording = () => invoke('set_recording', { recording: !isRecording.
   -webkit-app-region: no-drag;
   border: none;
   border-radius: 50%;
-  background: #4CAF50;
-  color: white;
+  background: white;
+  color: #4CAF50;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: all 0.3s;
-  box-shadow: 
-    0 0 0 4px rgba(76, 175, 80, 0.15),
-    0 4px 12px rgba(76, 175, 80, 0.3);
+  box-shadow:
+    0 0 0 4px rgba(0, 0, 0, 0.05),
+    0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .mic-btn:hover {
   transform: scale(1.05);
-  box-shadow: 
-    0 0 0 6px rgba(76, 175, 80, 0.2),
-    0 6px 16px rgba(76, 175, 80, 0.4);
+  box-shadow:
+    0 0 0 6px rgba(0, 0, 0, 0.08),
+    0 6px 16px rgba(0, 0, 0, 0.15);
 }
 
 .mic-btn.active {
-  background: #f44336;
-  box-shadow: 
-    0 0 0 4px rgba(244, 67, 54, 0.15),
-    0 4px 12px rgba(244, 67, 54, 0.3);
+  background: #4CAF50;
+  color: white;
+  box-shadow:
+    0 0 0 4px rgba(76, 175, 80, 0.15),
+    0 4px 12px rgba(76, 175, 80, 0.3);
   animation: glow 1.5s ease-in-out infinite;
 }
 
 .mic-btn.active:hover {
-  box-shadow: 
-    0 0 0 6px rgba(244, 67, 54, 0.2),
-    0 6px 16px rgba(244, 67, 54, 0.4);
+  box-shadow:
+    0 0 0 6px rgba(76, 175, 50, 0.2),
+    0 6px 16px rgba(76, 175, 80, 0.4);
 }
 
 .mic-btn svg {
@@ -145,15 +146,15 @@ const toggleRecording = () => invoke('set_recording', { recording: !isRecording.
 }
 
 @keyframes glow {
-  0%, 100% { 
-    box-shadow: 
-      0 0 0 4px rgba(244, 67, 54, 0.15),
-      0 0 20px rgba(244, 67, 54, 0.4);
+  0%, 100% {
+    box-shadow:
+      0 0 0 4px rgba(76, 175, 80, 0.15),
+      0 0 20px rgba(76, 175, 80, 0.4);
   }
-  50% { 
-    box-shadow: 
-      0 0 0 6px rgba(244, 67, 54, 0.25),
-      0 0 30px rgba(244, 67, 54, 0.6);
+  50% {
+    box-shadow:
+      0 0 0 6px rgba(76, 175, 80, 0.25),
+      0 0 30px rgba(76, 175, 80, 0.6);
   }
 }
 </style>
