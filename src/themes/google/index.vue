@@ -4,7 +4,12 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 
 const isRecording = ref(false);
+const isMaskActive = ref(false);
 let unlistenState: UnlistenFn;
+
+const toggleMask = () => {
+  isMaskActive.value = !isMaskActive.value;
+};
 
 onMounted(async () => {
   isRecording.value = await invoke('get_recording_state');
@@ -19,7 +24,7 @@ const toggleRecording = () => invoke('set_recording', { recording: !isRecording.
 </script>
 
 <template>
-  <div class="panel" :class="{ recording: isRecording }" data-tauri-drag-region>
+  <div class="panel" :class="{ recording: isRecording, active: isMaskActive }" data-tauri-drag-region @click="toggleMask">
     <div class="content">
       <div class="text">
         <span class="status">{{ isRecording ? 'Listening...' : 'Ready' }}</span>
@@ -28,7 +33,7 @@ const toggleRecording = () => invoke('set_recording', { recording: !isRecording.
         </div>
       </div>
 
-      <button class="mic-btn" :class="{ active: isRecording }" @click="toggleRecording">
+      <button class="mic-btn" :class="{ active: isRecording }" @click.stop="toggleRecording">
         <svg viewBox="0 0 24 24" fill="currentColor">
           <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
           <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
@@ -40,14 +45,29 @@ const toggleRecording = () => invoke('set_recording', { recording: !isRecording.
 
 <style scoped>
 .panel {
+  position: relative;
   width: 100%;
   height: 100%;
-  background: #f5f5f5;
+  background: transparent;
   border-radius: 32px;
-  box-shadow: 
+  box-shadow:
     0 2px 8px rgba(0, 0, 0, 0.08),
     0 4px 20px rgba(0, 0, 0, 0.05);
   overflow: hidden;
+}
+
+.content {
+  width: 100%;
+  height: 100%;
+  background: #f5f5f5;
+  /* 圆心位置：X轴(左->右) Y轴(上->下) */
+  /* 示例值：50% 50% = 中心，100% 50% = 右侧中间，50% 100% = 底部中间 */
+  clip-path: circle(0% at 87% 50%);
+  transition: clip-path 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.panel.active .content {
+  clip-path: circle(150% at 86% 50%);
 }
 
 :global(body) {
@@ -55,10 +75,10 @@ const toggleRecording = () => invoke('set_recording', { recording: !isRecording.
 }
 
 .content {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 100%;
   padding: 0 12px 0 24px;
   -webkit-app-region: drag;
 }
