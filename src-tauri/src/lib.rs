@@ -33,24 +33,24 @@ pub fn run() {
                             models::config::Theme::Default => (Some(240), Some(150)),
                             models::config::Theme::Google => (Some(400), Some(100)),
                         };
-                        commands::window::show_window(app.clone(), width, height);
+                        commands::theme::show_window(app.clone(), width, height);
                         crate::utils::recording_state::toggle(&state, &app);
                     }
                 })
                 .build(),
         )
         .invoke_handler(tauri::generate_handler![
-            commands::window::show_window,
-            commands::window::hide_window,
-            commands::recording::hide_and_stop_recording,
-            commands::window::quit_app,
-            commands::recording::get_recording_state,
-            commands::recording::set_recording,
+            commands::theme::show_window,
+            commands::theme::hide_window,
+            commands::theme::hide_and_stop_recording,
+            commands::theme::quit_app,
+            commands::theme::get_recording_state,
+            commands::theme::set_recording,
             commands::settings::open_settings,
             commands::settings::close_settings_window,
             commands::settings::get_config,
             commands::settings::sync_config,
-            commands::settings::test_asr_config,
+            commands::asr_test::test_asr_config,
         ])
         .setup(|app| {
             let config = Arc::new(Mutex::new(AppConfig::default()));
