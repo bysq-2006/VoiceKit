@@ -7,6 +7,7 @@ use std::sync::{Arc, Mutex};
 pub enum AsrProvider {
     Xunfei(super::providers::xunfei::XunfeiAsr),
     Doubao(super::providers::doubao::DoubaoAsr),
+    Funasr(super::providers::funasr::FunasrAsr),
 }
 
 impl AsrProvider {
@@ -14,6 +15,7 @@ impl AsrProvider {
         match self {
             AsrProvider::Xunfei(p) => p.start().await,
             AsrProvider::Doubao(p) => p.start().await,
+            AsrProvider::Funasr(p) => p.start().await,
         }
     }
 
@@ -21,6 +23,7 @@ impl AsrProvider {
         match self {
             AsrProvider::Xunfei(p) => p.stop().await,
             AsrProvider::Doubao(p) => p.stop().await,
+            AsrProvider::Funasr(p) => p.stop().await,
         }
     }
 }
@@ -67,6 +70,14 @@ impl AsrManager {
                     self.text_buffer.clone(),
                 )?;
                 Ok(AsrProvider::Doubao(p))
+            }
+            "funasr" => {
+                let p = super::providers::funasr::FunasrAsr::new(
+                    asr_config.funasr.clone(),
+                    self.audio_buffer.clone(),
+                    self.text_buffer.clone(),
+                )?;
+                Ok(AsrProvider::Funasr(p))
             }
             _ => Err(format!("未知的 ASR 提供商: {}", asr_config.provider))
         }

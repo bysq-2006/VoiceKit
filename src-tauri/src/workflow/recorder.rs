@@ -8,24 +8,40 @@ use std::time::Duration;
 
 const TARGET_SAMPLE_RATE: u32 = 16000;
 
-/// 重采样器：将输入采样率转换为16kHz
-/// 使用简单下采样：每 3 个采样取平均（如 48kHz -> 16kHz）
-struct Resampler;
+/// 重采样器：将输入采样率转换为 16kHz
+///
+/// 使用分数步进抽样，支持 44.1k/48k/16k 等常见输入采样率。
+/// 为避免跨回调边界抖动，保留 phase 连续性。
+struct Resampler {
+    step: f64,
+    phase: f64,
+}
 
 impl Resampler {
-    fn new(_input_rate: u32) -> Self {
-        Self
+    fn new(input_rate: u32) -> Self {
+        Self {
+            step: input_rate as f64 / TARGET_SAMPLE_RATE as f64,
+            phase: 0.0,
+        }
     }
 
-    /// 处理输入采样，返回16kHz的i16数据
+    /// 输入必须为 [-1, 1] 的归一化浮点采样
     fn process(&mut self, input: &[f64]) -> Vec<i16> {
-        // 每 3 个输入采样平均为 1 个输出采样（3:1 下采样）
-        input.chunks_exact(3)
-            .map(|chunk| {
-                let avg = (chunk[0] + chunk[1] + chunk[2]) / 3.0;
-                (avg * 32767.0).clamp(-32768.0, 32767.0) as i16
-            })
-            .collect()
+        if input.is_empty() {
+            return Vec::new();
+        }
+
+        let mut out = Vec::new();
+        let mut idx = self.phase;
+
+        while idx < input.len() as f64 {
+            let s = input[idx as usize];
+            out.push((s * 32767.0).clamp(-32768.0, 32767.0) as i16);
+            idx += self.step;
+        }
+
+        self.phase = idx - input.len() as f64;
+        out
     }
 }
 
@@ -72,8 +88,8 @@ impl AudioRecorder {
         log::info!("将重采样到: {}Hz 单声道", TARGET_SAMPLE_RATE);
 
         let stream = match config.sample_format() {
-            SampleFormat::I16 => Self::build_stream::<i16>(&device, &config.into(), audio_buffer),
-            SampleFormat::F32 => Self::build_stream::<f32>(&device, &config.into(), audio_buffer),
+            SampleFormat::I16 => Self::build_stream_i16(&device, &config.into(), audio_buffer),
+            SampleFormat::F32 => Self::build_stream_f32(&device, &config.into(), audio_buffer),
             _ => {
                 log::error!("不支持的采样格式: {:?}", config.sample_format());
                 return None;
@@ -92,30 +108,57 @@ impl AudioRecorder {
         }
     }
 
-    /// 构建录音流（统一处理i16和f32）
-    fn build_stream<T>(
+    /// 构建 i16 录音流
+    fn build_stream_i16(
         device: &cpal::Device,
         config: &StreamConfig,
         audio_buffer: Arc<AudioBuffer>,
-    ) -> Result<Stream, cpal::BuildStreamError>
-    where
-        T: Sample + SizedSample + Send + 'static,
-        f64: From<T>,
-    {
+    ) -> Result<Stream, cpal::BuildStreamError> {
         let channels = config.channels as usize;
         let sample_rate = config.sample_rate.0;
         let resampler = Arc::new(std::sync::Mutex::new(Resampler::new(sample_rate)));
 
         device.build_input_stream(
             config,
-            move |data: &[T], _| {
-                // 混音 + 转换为f64
+            move |data: &[i16], _| {
+                // 混音 + 归一化到 [-1, 1]
                 let mono: Vec<f64> = data
                     .chunks(channels)
-                    .map(|c| c.iter().map(|&s| f64::from(s)).sum::<f64>() / channels as f64)
+                    .map(|c| {
+                        c.iter().map(|&s| s as f64 / 32768.0).sum::<f64>() / channels as f64
+                    })
                     .collect();
 
                 // 重采样并写入
+                let out = resampler.lock().unwrap().process(&mono);
+                if !out.is_empty() {
+                    audio_buffer.write(&out);
+                }
+            },
+            |e| log::error!("录音错误: {}", e),
+            None,
+        )
+    }
+
+    /// 构建 f32 录音流
+    fn build_stream_f32(
+        device: &cpal::Device,
+        config: &StreamConfig,
+        audio_buffer: Arc<AudioBuffer>,
+    ) -> Result<Stream, cpal::BuildStreamError> {
+        let channels = config.channels as usize;
+        let sample_rate = config.sample_rate.0;
+        let resampler = Arc::new(std::sync::Mutex::new(Resampler::new(sample_rate)));
+
+        device.build_input_stream(
+            config,
+            move |data: &[f32], _| {
+                // f32 输入通常已在 [-1, 1]
+                let mono: Vec<f64> = data
+                    .chunks(channels)
+                    .map(|c| c.iter().map(|&s| s as f64).sum::<f64>() / channels as f64)
+                    .collect();
+
                 let out = resampler.lock().unwrap().process(&mono);
                 if !out.is_empty() {
                     audio_buffer.write(&out);
