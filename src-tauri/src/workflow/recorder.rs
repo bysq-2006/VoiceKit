@@ -1,10 +1,10 @@
 use crate::models::buffer::AudioBuffer;
 use crate::models::state::AppState;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use cpal::{Sample, SampleFormat, SizedSample, Stream, StreamConfig};
+use cpal::{SampleFormat, Stream, StreamConfig};
 use std::sync::Arc;
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 const TARGET_SAMPLE_RATE: u32 = 16000;
 
@@ -15,6 +15,64 @@ const TARGET_SAMPLE_RATE: u32 = 16000;
 struct Resampler {
     step: f64,
     phase: f64,
+}
+
+struct RecorderStats {
+    started_at: Instant,
+    last_log_at: Instant,
+    in_samples_total: u64,
+    out_samples_total: u64,
+    callback_count: u64,
+}
+
+impl RecorderStats {
+    fn new() -> Self {
+        let now = Instant::now();
+        Self {
+            started_at: now,
+            last_log_at: now,
+            in_samples_total: 0,
+            out_samples_total: 0,
+            callback_count: 0,
+        }
+    }
+
+    fn on_chunk(&mut self, in_samples: usize, out_samples: usize, input_rate: u32, channels: usize, buf_len: usize) {
+        self.in_samples_total += in_samples as u64;
+        self.out_samples_total += out_samples as u64;
+        self.callback_count += 1;
+
+        let now = Instant::now();
+        if now.duration_since(self.last_log_at) >= Duration::from_secs(1) {
+            let elapsed = now.duration_since(self.started_at).as_secs_f64().max(1e-6);
+            let in_rate = self.in_samples_total as f64 / elapsed;
+            let out_rate = self.out_samples_total as f64 / elapsed;
+            let expected = TARGET_SAMPLE_RATE as f64;
+            let rt = out_rate / expected;
+
+            log::info!(
+                "[REC] in={}Hz(ch={}) out≈{:.1}Hz expect={}Hz rt={:.3} cb={} out_total={} buf_len={}",
+                input_rate,
+                channels,
+                out_rate,
+                TARGET_SAMPLE_RATE,
+                rt,
+                self.callback_count,
+                self.out_samples_total,
+                buf_len
+            );
+
+            // 输入速率也打出来，便于定位设备侧异常
+            log::debug!(
+                "[REC-DETAIL] in_rate={:.1}Hz out_rate={:.1}Hz ratio(out/in)={:.4}",
+                in_rate,
+                out_rate,
+                if in_rate > 0.0 { out_rate / in_rate } else { 0.0 }
+            );
+
+            self.last_log_at = now;
+        }
+    }
 }
 
 impl Resampler {
@@ -117,6 +175,7 @@ impl AudioRecorder {
         let channels = config.channels as usize;
         let sample_rate = config.sample_rate.0;
         let resampler = Arc::new(std::sync::Mutex::new(Resampler::new(sample_rate)));
+        let stats = Arc::new(std::sync::Mutex::new(RecorderStats::new()));
 
         device.build_input_stream(
             config,
@@ -134,6 +193,10 @@ impl AudioRecorder {
                 if !out.is_empty() {
                     audio_buffer.write(&out);
                 }
+
+                if let Ok(mut s) = stats.lock() {
+                    s.on_chunk(mono.len(), out.len(), sample_rate, channels, audio_buffer.len());
+                }
             },
             |e| log::error!("录音错误: {}", e),
             None,
@@ -149,6 +212,7 @@ impl AudioRecorder {
         let channels = config.channels as usize;
         let sample_rate = config.sample_rate.0;
         let resampler = Arc::new(std::sync::Mutex::new(Resampler::new(sample_rate)));
+        let stats = Arc::new(std::sync::Mutex::new(RecorderStats::new()));
 
         device.build_input_stream(
             config,
@@ -162,6 +226,10 @@ impl AudioRecorder {
                 let out = resampler.lock().unwrap().process(&mono);
                 if !out.is_empty() {
                     audio_buffer.write(&out);
+                }
+
+                if let Ok(mut s) = stats.lock() {
+                    s.on_chunk(mono.len(), out.len(), sample_rate, channels, audio_buffer.len());
                 }
             },
             |e| log::error!("录音错误: {}", e),
