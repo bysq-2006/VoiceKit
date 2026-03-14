@@ -4,8 +4,8 @@ use futures::{SinkExt, StreamExt};
 use serde_json::Value;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
-use tokio::sync::Mutex;
+use std::time::Duration;
+use tokio::sync::{Mutex, Notify};
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 
 const FRAME_SAMPLES: usize = 1600; // 100ms @ 16kHz
@@ -20,54 +20,7 @@ pub struct FunasrAsr {
     ws_sink: Arc<Mutex<Option<tokio::sync::mpsc::Sender<Message>>>>,
     is_connected: Arc<AtomicBool>,
     session_has_audio: Arc<AtomicBool>,
-}
-
-struct SenderStats {
-    started_at: Instant,
-    last_log_at: Instant,
-    sent_samples_total: u64,
-    sent_frames_total: u64,
-}
-
-impl SenderStats {
-    fn new() -> Self {
-        let now = Instant::now();
-        Self {
-            started_at: now,
-            last_log_at: now,
-            sent_samples_total: 0,
-            sent_frames_total: 0,
-        }
-    }
-
-    fn on_sent(&mut self, sent_samples: usize, buf_len: usize) {
-        self.sent_samples_total += sent_samples as u64;
-        self.sent_frames_total += 1;
-
-        let now = Instant::now();
-        if now.duration_since(self.last_log_at) >= Duration::from_secs(1) {
-            let elapsed = now.duration_since(self.started_at).as_secs_f64().max(1e-6);
-            let out_rate = self.sent_samples_total as f64 / elapsed;
-            let rt = out_rate / 16000.0;
-            let avg_frame_samples = if self.sent_frames_total > 0 {
-                self.sent_samples_total as f64 / self.sent_frames_total as f64
-            } else {
-                0.0
-            };
-            let avg_frame_ms = avg_frame_samples / 16000.0 * 1000.0;
-            log::info!(
-                "[ASR-SEND] out≈{:.1}Hz expect=16000Hz rt={:.3} frames={} sent_total={} avg_frame={:.1}samples/{:.1}ms buf_len={}",
-                out_rate,
-                rt,
-                self.sent_frames_total,
-                self.sent_samples_total,
-                avg_frame_samples,
-                avg_frame_ms,
-                buf_len
-            );
-            self.last_log_at = now;
-        }
-    }
+    done_signal: Arc<Notify>,
 }
 
 impl FunasrAsr {
@@ -92,6 +45,7 @@ impl FunasrAsr {
             ws_sink: Arc::new(Mutex::new(None)),
             is_connected: Arc::new(AtomicBool::new(false)),
             session_has_audio: Arc::new(AtomicBool::new(false)),
+            done_signal: Arc::new(Notify::new()),
         })
     }
 
@@ -100,17 +54,10 @@ impl FunasrAsr {
     }
 
     fn pcm_to_bytes(samples: &[i16]) -> Vec<u8> {
-        let mut bytes = Vec::with_capacity(samples.len() * 2);
-        for s in samples {
-            bytes.extend_from_slice(&s.to_le_bytes());
-        }
-        bytes
-    }
-
-    async fn send_finish_text(
-        sink: &tokio::sync::mpsc::Sender<Message>,
-    ) {
-        let _ = sink.send(Message::Text(FINISH_CMD.to_string())).await;
+        samples
+            .iter()
+            .flat_map(|s| s.to_le_bytes())
+            .collect::<Vec<u8>>()
     }
 
     async fn start_listening(
@@ -123,6 +70,8 @@ impl FunasrAsr {
     ) {
         let text_buffer = self.text_buffer.clone();
         let connected = self.is_connected.clone();
+        let done_signal = self.done_signal.clone();
+        let ws_sink = self.ws_sink.clone();
 
         tokio::spawn(async move {
             futures::pin_mut!(stream);
@@ -151,6 +100,7 @@ impl FunasrAsr {
                             "done" => {
                                 log::info!("[ASR-RECV] done");
                                 connected.store(false, Ordering::SeqCst);
+                                done_signal.notify_waiters();
                                 break;
                             }
                             "error" => {
@@ -160,21 +110,28 @@ impl FunasrAsr {
                                     .unwrap_or("unknown");
                                 log::error!("FunASR 返回错误: {}", msg);
                                 connected.store(false, Ordering::SeqCst);
+                                done_signal.notify_waiters();
                                 break;
                             }
                             _ => {}
                         }
                     }
-                    Ok(Message::Close(_)) => break,
+                    Ok(Message::Close(_)) => {
+                        done_signal.notify_waiters();
+                        break;
+                    }
                     Ok(_) => {}
                     Err(e) => {
                         log::error!("FunASR 监听失败: {}", e);
+                        done_signal.notify_waiters();
                         break;
                     }
                 }
             }
 
             connected.store(false, Ordering::SeqCst);
+            done_signal.notify_waiters();
+            *ws_sink.lock().await = None;
         });
     }
 
@@ -197,7 +154,6 @@ impl FunasrAsr {
         tokio::spawn(async move {
             let mut read_buf = vec![0i16; 1600];
             let mut pending: Vec<i16> = Vec::with_capacity(FRAME_SAMPLES * 2);
-            let mut stats = SenderStats::new();
             let mut send_finish = true;
 
             loop {
@@ -231,8 +187,6 @@ impl FunasrAsr {
                         break;
                     }
                     this.session_has_audio.store(true, Ordering::SeqCst);
-
-                    stats.on_sent(FRAME_SAMPLES, this.audio_buffer.len());
                 }
 
                 if !send_finish {
@@ -243,7 +197,6 @@ impl FunasrAsr {
                     if !pending.is_empty() {
                         let bytes = Self::pcm_to_bytes(&pending);
                         if sink.send(Message::Binary(bytes)).await.is_ok() {
-                            stats.on_sent(pending.len(), this.audio_buffer.len());
                             this.session_has_audio.store(true, Ordering::SeqCst);
                         }
                         pending.clear();
@@ -259,17 +212,25 @@ impl FunasrAsr {
                 let _ = sink
                     .send(Message::Text(FINISH_CMD.to_string()))
                     .await;
+
+                // 等待接收协程在 done/error/close 时发出的信号，再执行 close。
+                let waited = tokio::time::timeout(
+                    Duration::from_millis(1200),
+                    this.done_signal.notified(),
+                )
+                .await;
+
+                match waited {
+                    Ok(_) => log::info!("[ASR-SEND] done/close observed, close sink"),
+                    Err(_) => log::info!("[ASR-SEND] wait done timeout, close sink"),
+                }
                 let _ = sink.close().await;
             } else if send_finish && this.is_connected.load(Ordering::SeqCst) && !has_audio {
                 log::info!("[ASR-SEND] skip finish: no audio sent in this session");
                 let _ = sink.close().await;
             }
 
-            log::info!(
-                "[ASR-SEND] sender exit frames={} samples={}",
-                stats.sent_frames_total,
-                stats.sent_samples_total
-            );
+            log::info!("[ASR-SEND] sender exit");
         });
 
         Ok(())
@@ -277,23 +238,14 @@ impl FunasrAsr {
 
     pub async fn stop(&self) {
         let has_audio = self.session_has_audio.load(Ordering::SeqCst);
-        log::info!(
-            "FunASR 停止: 发送 finish 并等待发送协程退出 is_connected={} has_audio={} audio_finished={} audio_len={}",
-            self.is_connected.load(Ordering::SeqCst),
-            has_audio,
-            self.audio_buffer.is_finished(),
-            self.audio_buffer.len()
-        );
+        log::info!("FunASR 停止: has_audio={}", has_audio);
         if has_audio {
             if let Some(sink) = self.ws_sink.lock().await.as_ref() {
-                Self::send_finish_text(sink).await;
+                let _ = sink.send(Message::Text(FINISH_CMD.to_string())).await;
             }
         } else {
             log::info!("FunASR 停止: 跳过 finish（当前会话未发送音频）");
+            self.is_connected.store(false, Ordering::SeqCst);
         }
-        self.session_has_audio.store(false, Ordering::SeqCst);
-        self.is_connected.store(false, Ordering::SeqCst);
-        *self.ws_sink.lock().await = None;
     }
 }
-
