@@ -8,6 +8,9 @@ use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 
+const FRAME_SAMPLES: usize = 1600; // 100ms @ 16kHz
+const FINISH_CMD: &str = "{\"cmd\":\"finish\"}";
+
 #[derive(Clone)]
 pub struct FunasrAsr {
     host: String,
@@ -16,6 +19,7 @@ pub struct FunasrAsr {
     text_buffer: Arc<TextBuffer>,
     ws_sink: Arc<Mutex<Option<tokio::sync::mpsc::Sender<Message>>>>,
     is_connected: Arc<AtomicBool>,
+    session_has_audio: Arc<AtomicBool>,
 }
 
 struct SenderStats {
@@ -87,11 +91,26 @@ impl FunasrAsr {
             text_buffer,
             ws_sink: Arc::new(Mutex::new(None)),
             is_connected: Arc::new(AtomicBool::new(false)),
+            session_has_audio: Arc::new(AtomicBool::new(false)),
         })
     }
 
     fn ws_url(&self) -> String {
         format!("ws://{}:{}/ws/asr", self.host, self.port)
+    }
+
+    fn pcm_to_bytes(samples: &[i16]) -> Vec<u8> {
+        let mut bytes = Vec::with_capacity(samples.len() * 2);
+        for s in samples {
+            bytes.extend_from_slice(&s.to_le_bytes());
+        }
+        bytes
+    }
+
+    async fn send_finish_text(
+        sink: &tokio::sync::mpsc::Sender<Message>,
+    ) {
+        let _ = sink.send(Message::Text(FINISH_CMD.to_string())).await;
     }
 
     async fn start_listening(
@@ -167,6 +186,7 @@ impl FunasrAsr {
 
         let (mut sink, stream) = ws_stream.split();
         self.is_connected.store(true, Ordering::SeqCst);
+        self.session_has_audio.store(false, Ordering::SeqCst);
 
         self.start_listening(stream).await;
 
@@ -175,11 +195,7 @@ impl FunasrAsr {
 
         let this = self.clone();
         tokio::spawn(async move {
-            // 100ms @ 16kHz => 1600 samples
-            const FRAME_SAMPLES: usize = 1600;
-            // 从 AudioBuffer 拉取的小块缓存
             let mut read_buf = vec![0i16; 1600];
-            // 组帧缓存：严格攒满 1600 samples 才发一帧
             let mut pending: Vec<i16> = Vec::with_capacity(FRAME_SAMPLES * 2);
             let mut stats = SenderStats::new();
             let mut send_finish = true;
@@ -206,16 +222,15 @@ impl FunasrAsr {
 
                 while pending.len() >= FRAME_SAMPLES {
                     let frame: Vec<i16> = pending.drain(..FRAME_SAMPLES).collect();
-                    let mut bytes = Vec::with_capacity(FRAME_SAMPLES * 2);
-                    for s in &frame {
-                        bytes.extend_from_slice(&s.to_le_bytes());
-                    }
+                    let bytes = Self::pcm_to_bytes(&frame);
 
                     if sink.send(Message::Binary(bytes)).await.is_err() {
+                        log::warn!("[ASR-SEND] binary send failed -> mark disconnected");
                         this.is_connected.store(false, Ordering::SeqCst);
                         send_finish = false;
                         break;
                     }
+                    this.session_has_audio.store(true, Ordering::SeqCst);
 
                     stats.on_sent(FRAME_SAMPLES, this.audio_buffer.len());
                 }
@@ -225,14 +240,11 @@ impl FunasrAsr {
                 }
 
                 if this.audio_buffer.is_finished() && this.audio_buffer.is_empty() {
-                    // 录音结束时把不足 100ms 的尾包也发出，避免最后一句被吞
                     if !pending.is_empty() {
-                        let mut bytes = Vec::with_capacity(pending.len() * 2);
-                        for s in &pending {
-                            bytes.extend_from_slice(&s.to_le_bytes());
-                        }
+                        let bytes = Self::pcm_to_bytes(&pending);
                         if sink.send(Message::Binary(bytes)).await.is_ok() {
                             stats.on_sent(pending.len(), this.audio_buffer.len());
+                            this.session_has_audio.store(true, Ordering::SeqCst);
                         }
                         pending.clear();
                     }
@@ -241,11 +253,15 @@ impl FunasrAsr {
                 }
             }
 
-            if send_finish && this.is_connected.load(Ordering::SeqCst) {
+            let has_audio = this.session_has_audio.load(Ordering::SeqCst);
+            if send_finish && this.is_connected.load(Ordering::SeqCst) && has_audio {
                 log::info!("[ASR-SEND] send finish(cmd=finish)");
                 let _ = sink
-                    .send(Message::Text("{\"cmd\":\"finish\"}".to_string()))
+                    .send(Message::Text(FINISH_CMD.to_string()))
                     .await;
+                let _ = sink.close().await;
+            } else if send_finish && this.is_connected.load(Ordering::SeqCst) && !has_audio {
+                log::info!("[ASR-SEND] skip finish: no audio sent in this session");
                 let _ = sink.close().await;
             }
 
@@ -260,12 +276,22 @@ impl FunasrAsr {
     }
 
     pub async fn stop(&self) {
-        log::info!("FunASR 停止: 发送 finish 并等待发送协程退出");
-        if let Some(sink) = self.ws_sink.lock().await.as_ref() {
-            let _ = sink
-                .send(Message::Text("{\"cmd\":\"finish\"}".to_string()))
-                .await;
+        let has_audio = self.session_has_audio.load(Ordering::SeqCst);
+        log::info!(
+            "FunASR 停止: 发送 finish 并等待发送协程退出 is_connected={} has_audio={} audio_finished={} audio_len={}",
+            self.is_connected.load(Ordering::SeqCst),
+            has_audio,
+            self.audio_buffer.is_finished(),
+            self.audio_buffer.len()
+        );
+        if has_audio {
+            if let Some(sink) = self.ws_sink.lock().await.as_ref() {
+                Self::send_finish_text(sink).await;
+            }
+        } else {
+            log::info!("FunASR 停止: 跳过 finish（当前会话未发送音频）");
         }
+        self.session_has_audio.store(false, Ordering::SeqCst);
         self.is_connected.store(false, Ordering::SeqCst);
         *self.ws_sink.lock().await = None;
     }
