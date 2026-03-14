@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import DoubaoConfig from './DoubaoConfig.vue';
+import FunasrConfig from './FunasrConfig.vue';
 import XunfeiConfig from './XunfeiConfig.vue';
 import type { ASRConfig } from '../../../composables/useConfig';
 
@@ -16,6 +17,7 @@ const emit = defineEmits<{
 const providers = [
   { key: 'doubao' as const, name: '豆包 (Volcengine)' },
   { key: 'xunfei' as const, name: '讯飞 (iFlytek)' },
+  { key: 'funasr' as const, name: '本地 FunASR' },
 ];
 
 const currentProvider = computed({
@@ -37,6 +39,13 @@ const xunfeiConfig = computed({
   get: () => props.modelValue.xunfei,
   set: (val) => {
     emit('update:modelValue', { ...props.modelValue, xunfei: val });
+  }
+});
+
+const funasrConfig = computed({
+  get: () => props.modelValue.funasr,
+  set: (val) => {
+    emit('update:modelValue', { ...props.modelValue, funasr: val });
   }
 });
 </script>
@@ -63,6 +72,11 @@ const xunfeiConfig = computed({
       <XunfeiConfig
         v-else-if="modelValue.provider === 'xunfei'"
         v-model="xunfeiConfig"
+        @save="$emit('save')"
+      />
+      <FunasrConfig
+        v-else-if="modelValue.provider === 'funasr'"
+        v-model="funasrConfig"
         @save="$emit('save')"
       />
     </div>

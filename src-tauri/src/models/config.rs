@@ -19,7 +19,7 @@ pub struct AppConfig {
 /// ASR 全局配置（包含所有服务商的配置）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AsrConfig {
-    /// 当前使用的服务商: doubao / xunfei
+    /// 当前使用的服务商: doubao / xunfei / funasr
     #[serde(default = "default_asr_provider")]
     pub provider: String,
 
@@ -30,6 +30,10 @@ pub struct AsrConfig {
     /// 讯飞配置
     #[serde(default)]
     pub xunfei: XunfeiConfig,
+
+    /// 本地 FunASR 配置
+    #[serde(default)]
+    pub funasr: FunasrConfig,
 }
 
 impl Default for AsrConfig {
@@ -38,6 +42,7 @@ impl Default for AsrConfig {
             provider: default_asr_provider(),
             doubao: DoubaoConfig::default(),
             xunfei: XunfeiConfig::default(),
+            funasr: FunasrConfig::default(),
         }
     }
 }
@@ -65,12 +70,39 @@ pub struct XunfeiConfig {
     pub api_secret: Option<String>,
 }
 
+/// 本地 FunASR 配置
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FunasrConfig {
+    #[serde(default = "default_funasr_host")]
+    pub host: String,
+
+    #[serde(default = "default_funasr_port")]
+    pub port: u16,
+}
+
+impl Default for FunasrConfig {
+    fn default() -> Self {
+        Self {
+            host: default_funasr_host(),
+            port: default_funasr_port(),
+        }
+    }
+}
+
 fn default_asr_provider() -> String {
     "doubao".to_string()
 }
 
 fn default_shortcut() -> String {
     "Shift+E".to_string()
+}
+
+fn default_funasr_host() -> String {
+    "127.0.0.1".to_string()
+}
+
+fn default_funasr_port() -> u16 {
+    10095
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]

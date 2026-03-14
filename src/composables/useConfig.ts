@@ -3,12 +3,13 @@ import { invoke } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import type { ThemeName } from '../themes/index'
 
-export type ASRProviderType = 'doubao' | 'xunfei'
+export type ASRProviderType = 'doubao' | 'xunfei' | 'funasr'
 
 export interface ASRConfig {
   provider: ASRProviderType
   doubao: { app_id: string; api_key: string }
   xunfei: { app_id: string; api_key: string; api_secret: string }
+  funasr: { host: string; port: number }
 }
 
 export interface AppConfig {
@@ -26,6 +27,7 @@ const defaultConfig: AppConfig = {
     provider: 'doubao',
     doubao: { app_id: '', api_key: '' },
     xunfei: { app_id: '', api_key: '', api_secret: '' },
+    funasr: { host: '127.0.0.1', port: 10095 },
   },
 }
 

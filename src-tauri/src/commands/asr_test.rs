@@ -1,4 +1,4 @@
-use crate::models::config::{AsrConfig, XunfeiConfig, DoubaoConfig};
+use crate::models::config::{AsrConfig, DoubaoConfig, FunasrConfig, XunfeiConfig};
 
 /// 测试 ASR 配置
 /// 尝试建立 WebSocket 连接来验证配置是否正确
@@ -7,6 +7,7 @@ pub async fn test_asr_config(config: AsrConfig) -> Result<(), String> {
     match config.provider.as_str() {
         "xunfei" => test_xunfei_config(&config.xunfei).await,
         "doubao" => test_doubao_config(&config.doubao).await,
+        "funasr" => test_funasr_config(&config.funasr).await,
         _ => Err(format!("未知的 ASR 提供商: {}", config.provider)),
     }
 }
@@ -94,6 +95,35 @@ async fn test_doubao_config(config: &DoubaoConfig) -> Result<(), String> {
     // 尝试建立连接
     match tokio::time::timeout(std::time::Duration::from_secs(5), connect_async(request)).await {
         Ok(Ok(_)) => Ok(()),
+        Ok(Err(e)) => Err(format!("连接失败: {}", e)),
+        Err(_) => Err("连接超时".to_string()),
+    }
+}
+
+/// 测试本地 FunASR 配置
+async fn test_funasr_config(config: &FunasrConfig) -> Result<(), String> {
+    use futures::SinkExt;
+    use tokio_tungstenite::{connect_async, tungstenite::Message};
+
+    let host = config.host.trim();
+    if host.is_empty() {
+        return Err("请提供 Host".to_string());
+    }
+    if config.port == 0 {
+        return Err("请提供有效的 Port".to_string());
+    }
+
+    let ws_url = format!("ws://{}:{}/ws/asr", host, config.port);
+
+    match tokio::time::timeout(std::time::Duration::from_secs(5), connect_async(&ws_url)).await {
+        Ok(Ok((mut ws, _))) => {
+            // 握手成功即视为可达；发送 finish 让服务端主动结束会话
+            let _ = ws
+                .send(Message::Text("{\"cmd\":\"finish\"}".to_string()))
+                .await;
+            let _ = ws.close(None).await;
+            Ok(())
+        }
         Ok(Err(e)) => Err(format!("连接失败: {}", e)),
         Err(_) => Err("连接超时".to_string()),
     }
