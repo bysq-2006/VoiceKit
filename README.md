@@ -32,6 +32,14 @@
 
 > 新用户有 20小时 免费额度。
 
+### 本地
+
+需要下载[funasr一键包](https://pan.baidu.com/s/1Efhy0BfcSPOQhUldD0ClZA?pwd=0514) 提取码: 0514
+| 步骤 | 操作 |
+|------|------|
+| 1 | 下载并解压 funasr 一键包 |
+| 2 | 运行 `start.bat` 启动本地服务 |
+
 ### 讯飞
 
 需要：App ID、API Key、API Secret
