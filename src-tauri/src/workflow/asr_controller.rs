@@ -51,7 +51,7 @@ async fn run_asr_loop(app_state: Arc<AppState>) {
             if let Some(provider) = current_provider.take() {
                 provider.stop().await;
                 // 等待 2 秒让服务端返回最后结果
-                tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+                // tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
                 log::info!("ASR 已停止");
             }
             
