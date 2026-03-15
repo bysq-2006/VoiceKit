@@ -7,6 +7,10 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 
+const CHUNK_SAMPLES_100MS: usize = 1600; // 16kHz * 0.1s
+const FINISH_CMD: &str = "{\"cmd\":\"finish\"}";
+const CHUNK_INTERVAL_100MS: std::time::Duration = std::time::Duration::from_millis(100);
+
 #[derive(Clone)]
 pub struct FunasrAsr {
     host: String,
@@ -26,6 +30,10 @@ struct FunasrEvent {
 }
 
 impl FunasrAsr {
+    fn pcm16le_bytes(samples: &[i16]) -> Vec<u8> {
+        samples.iter().flat_map(|s| s.to_le_bytes()).collect()
+    }
+
     pub fn new(
         config: FunasrConfig,
         audio_buffer: Arc<AudioBuffer>,
@@ -53,7 +61,7 @@ impl FunasrAsr {
         format!("ws://{}:{}/ws/asr", self.host, self.port)
     }
 
-    async fn start_listening(
+    fn start_listening(
         &self,
         mut stream: futures::stream::SplitStream<
             tokio_tungstenite::WebSocketStream<
@@ -72,33 +80,21 @@ impl FunasrAsr {
                             continue;
                         };
 
-                        match event.r#type.as_str() {
-                            "final" => {
-                                let final_text = event.text.trim();
-                                if !final_text.is_empty() {
-                                    text_buffer.push_text(final_text);
-                                }
+                        if event.r#type == "final" {
+                            let final_text = event.text.trim();
+                            if !final_text.is_empty() {
+                                text_buffer.push_text(final_text);
                             }
-                            "done" => {
-                                is_connected.store(false, Ordering::SeqCst);
-                                break;
-                            }
-                            "error" => {
-                                is_connected.store(false, Ordering::SeqCst);
-                                break;
-                            }
-                            _ => {}
+                            continue;
+                        }
+
+                        if event.r#type == "done" || event.r#type == "error" {
+                            break;
                         }
                     }
-                    Ok(Message::Close(_)) => {
-                        is_connected.store(false, Ordering::SeqCst);
-                        break;
-                    }
+                    Ok(Message::Close(_)) => break,
                     Ok(_) => {}
-                    Err(_) => {
-                        is_connected.store(false, Ordering::SeqCst);
-                        break;
-                    }
+                    Err(_) => break,
                 }
             }
 
@@ -114,14 +110,13 @@ impl FunasrAsr {
 
         let (mut ws_sink, ws_stream) = ws_stream.split();
         self.is_connected.store(true, Ordering::SeqCst);
-        self.start_listening(ws_stream).await;
+        self.start_listening(ws_stream);
 
         let (tx, mut rx) = tokio::sync::mpsc::channel::<Message>(16);
         *self.ws_sink.lock().await = Some(tx);
 
         let this = self.clone();
         tokio::spawn(async move {
-            const CHUNK_SAMPLES_100MS: usize = 1600; // 16kHz * 0.1s
             let mut read_buf = vec![0i16; CHUNK_SAMPLES_100MS];
             let mut pending_samples: Vec<i16> = Vec::with_capacity(CHUNK_SAMPLES_100MS * 2);
 
@@ -150,8 +145,7 @@ impl FunasrAsr {
 
                 while pending_samples.len() >= CHUNK_SAMPLES_100MS {
                     let chunk: Vec<i16> = pending_samples.drain(..CHUNK_SAMPLES_100MS).collect();
-                    let audio_bytes: Vec<u8> =
-                        chunk.into_iter().flat_map(|s| s.to_le_bytes()).collect();
+                    let audio_bytes = Self::pcm16le_bytes(&chunk);
 
                     if ws_sink.send(Message::Binary(audio_bytes)).await.is_err() {
                         this.is_connected.store(false, Ordering::SeqCst);
@@ -159,15 +153,12 @@ impl FunasrAsr {
                     }
 
                     // 与服务端 chunk_ms=100 对齐
-                    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                    tokio::time::sleep(CHUNK_INTERVAL_100MS).await;
                 }
 
                 if this.audio_buffer.is_finished() && this.audio_buffer.is_empty() {
                     if !pending_samples.is_empty() {
-                        let audio_bytes: Vec<u8> = pending_samples
-                            .iter()
-                            .flat_map(|s| s.to_le_bytes())
-                            .collect();
+                        let audio_bytes = Self::pcm16le_bytes(&pending_samples);
                         let _ = ws_sink.send(Message::Binary(audio_bytes)).await;
                         pending_samples.clear();
                     }
@@ -177,7 +168,7 @@ impl FunasrAsr {
 
             if this.is_connected.load(Ordering::SeqCst) {
                 let _ = ws_sink
-                    .send(Message::Text("{\"cmd\":\"finish\"}".to_string()))
+                    .send(Message::Text(FINISH_CMD.to_string()))
                     .await;
                 let _ = ws_sink.close().await;
             }
@@ -187,14 +178,11 @@ impl FunasrAsr {
     }
 
     pub async fn stop(&self) {
-        self.is_connected.store(false, Ordering::SeqCst);
-
-        if let Some(sink) = self.ws_sink.lock().await.as_ref() {
-            let _ = sink
-                .send(Message::Text("{\"cmd\":\"finish\"}".to_string()))
-                .await;
+        let sink = self.ws_sink.lock().await.take();
+        if let Some(sink) = sink {
+            let _ = sink.send(Message::Text(FINISH_CMD.to_string())).await;
         }
 
-        *self.ws_sink.lock().await = None;
+        self.is_connected.store(false, Ordering::SeqCst);
     }
 }
