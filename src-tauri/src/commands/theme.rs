@@ -45,7 +45,8 @@ pub fn set_recording(
 }
 
 #[tauri::command]
-pub fn hide_and_stop_recording(app: tauri::AppHandle) {
+pub fn hide_and_stop_recording(app: tauri::AppHandle, state: State<AppState>) {
+    crate::utils::recording_state::set(&state, &app, false);
     window_ext::hide(&app, "main");
 }
 

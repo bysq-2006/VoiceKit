@@ -39,6 +39,9 @@ pub fn toggle(state: &AppState, app_handle: &tauri::AppHandle) -> bool {
             *r = !*r;
             *r
         };
+        if !new_state {
+            state.text_buffer.clear();
+        }
         if let Some(window) = app_handle.get_webview_window("main") {
             let _ = window.emit("recording-state-changed", new_state);
         }
@@ -49,6 +52,9 @@ pub fn toggle(state: &AppState, app_handle: &tauri::AppHandle) -> bool {
 pub fn set(state: &AppState, app_handle: &tauri::AppHandle, recording: bool) -> bool {
     try_run(|| {
         *state.is_recording.lock().unwrap() = recording;
+        if !recording {
+            state.text_buffer.clear();
+        }
         if let Some(window) = app_handle.get_webview_window("main") {
             let _ = window.emit("recording-state-changed", recording);
         }
